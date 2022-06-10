@@ -62,7 +62,6 @@ import warnings
 import astropy.units as u
 from cdflib.epochs import CDFepoch
 from sunpy import log
-# from sunpy.io.cdf import read_cdf
 from sunpy.net import Fido
 from sunpy.net import attrs as a
 from sunpy.timeseries import TimeSeries
