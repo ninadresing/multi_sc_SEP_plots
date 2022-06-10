@@ -9,7 +9,7 @@ import datetime as dt
 
 # make selections
 #############################################################
-first_date = dt.datetime(2021, 1, 1)
+first_date = dt.datetime(2021, 1, 29)
 last_date = dt.datetime(2021, 6, 1)
 plot_period = '7D'
 averaging = '1H'  # None
@@ -264,7 +264,7 @@ outpath = '/Users/dresing/Documents/Proposals/SERPENTINE_H2020/Cycle25_Multi-SC_
 dates = pd.date_range(start=first_date, end=last_date, freq=plot_period)
 for startdate in dates.to_pydatetime():
     enddate = startdate + pd.Timedelta(plot_period)
-    outfile = f'{outpath}Multi_sc_plot_{startdate}_{plot_period}_{averaging}-av.png'
+    outfile = f'{outpath}Multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av.png'
 
     
     if Bepi:
