@@ -9,8 +9,8 @@ import datetime as dt
 
 # make selections
 #############################################################
-first_date = dt.datetime(2020, 1, 1)
-last_date = dt.datetime(2020, 6, 1)
+first_date = dt.datetime(2021, 1, 1)
+last_date = dt.datetime(2021, 6, 1)
 plot_period = '7D'
 averaging = '1H'  # None
 
@@ -483,7 +483,7 @@ for startdate in dates.to_pydatetime():
         panels = panels +1
     if plot_p:
         panels = panels +1
-    fig, axes = plt.subplots(panels, figsize=(18, 15), dpi=200, sharex=True)  # figsize=(9,7)
+    fig, axes = plt.subplots(panels, figsize=(24, 15), dpi=200, sharex=True)
     axnum = 0
     # Intensities
     ####################################################################
