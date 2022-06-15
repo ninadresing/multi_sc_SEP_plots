@@ -10,7 +10,7 @@ import datetime as dt
 
 # make selections
 #############################################################
-first_date = dt.datetime(2021, 6, 4)
+first_date = dt.datetime(2021, 7,2)
 last_date = dt.datetime(2021, 12, 30)
 plot_period = '7D'
 averaging = '1H'  # None
@@ -38,7 +38,7 @@ from solo_epd_loader import epd_load
 from stereo_loader import calc_av_en_flux_SEPT, stereo_load
 from stereo_loader import calc_av_en_flux_HET as calc_av_en_flux_ST_HET
 from wind_3dp_loader import wind3dp_load
-import cdflib
+# import cdflib
 import warnings
 import astropy.units as u
 from cdflib.epochs import CDFepoch
@@ -47,6 +47,8 @@ from sunpy.net import Fido
 from sunpy.net import attrs as a
 from sunpy.timeseries import TimeSeries
 from sunpy.util.exceptions import warn_user
+import os
+
 
 # omit some warnings
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
@@ -161,17 +163,16 @@ def calc_av_en_flux_EPD(df, energies, en_channel, species, instrument):  # origi
 # some plot options
 intensity_label = 'Flux\n/(s cm² sr MeV)'
 linewidth = 1.5
-outpath = None  # os.getcwd()
 plot_e_100 = True
 plot_e_1 = False
 plot_p = False
 save_fig = True
-outpath = '/Users/dresing/Documents/Proposals/SERPENTINE_H2020/Cycle25_Multi-SC_SEP_Event_List/EPT_conta_corr_plots/'
+outpath = '/Users/dresing/Documents/Proposals/SERPENTINE_H2020/Cycle25_Multi-SC_SEP_Event_List/EPT_conta_corr_plots'
 
 dates = pd.date_range(start=first_date, end=last_date, freq=plot_period)
 for startdate in dates.to_pydatetime():
     enddate = startdate + pd.Timedelta(plot_period)
-    outfile = f'{outpath}SOLO_EPT_conta_corr_{startdate.date()}_{plot_period}_{averaging}-av.png'
+    outfile = f'{outpath}{os.sep}SOLO_EPT_conta_corr_{startdate.date()}_{plot_period}_{averaging}-av.png'
 
     if SOLO:
         solo_ept_color = seaborn_colorblind[5]  # 'blue'
@@ -224,12 +225,17 @@ for startdate in dates.to_pydatetime():
                     Electron_Flux_cont = np.zeros(np.shape(df_ept_e))
                     for tt in range(len(df_ept_e)):
                         Electron_Flux_cont[tt, :] = np.matmul(ion_cont_corr_matrix, df_ept_p.values[tt, :])
-                    df_ept_e = df_ept_e - Electron_Flux_cont
+                    df_ept_e_corr = df_ept_e - Electron_Flux_cont
                 
+                breakpoint
                 df_ept_e, ept_chstring_e = calc_av_en_flux_EPD(ept_e, ept_energies, ept_ch_e100, 'e', 'ept')
+                # df_ept_e_cor, ept_chstring_e = calc_av_en_flux_EPD(ept_e, ept_energies, ept_ch_e100, 'e', 'ept')
+
 
                 if isinstance(solo_ept_resample, str):
                     df_ept_e = resample_df(df_ept_e, solo_ept_resample)
+
+
             if plot_p:
                 df_ept_p = ept_p['Ion_Flux']
                 ept_en_str_p = ept_energies['Ion_Bins_Text'][:]
@@ -339,6 +345,6 @@ for startdate in dates.to_pydatetime():
         plt.savefig(outfile)
         plt.close()
         print('')
-        print('Saved '+f'{outpath}/multi_sc_{str(startdate)}{species}{averaging}.png')
+        print('Saved '+outfile)
     else:
         plt.show()
