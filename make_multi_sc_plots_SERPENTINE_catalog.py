@@ -10,7 +10,6 @@ import datetime as dt
 # make selections
 #############################################################
 first_date = dt.datetime(2021, 6, 18)
-# first_date = dt.datetime(2021, 6, 25)
 last_date = dt.datetime(2021, 12, 30)
 plot_period = '7D'
 averaging = '1H'  # None
@@ -65,7 +64,7 @@ from sunpy.net import Fido
 from sunpy.net import attrs as a
 from sunpy.timeseries import TimeSeries
 from sunpy.util.exceptions import warn_user
-
+import os
 # omit some warnings
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 warnings.simplefilter(action='ignore', category=sunpy.util.SunpyUserWarning)
@@ -258,12 +257,12 @@ plot_e_100 = True
 plot_e_1 = True
 plot_p = True
 save_fig = True
-outpath = '/Users/dresing/Documents/Proposals/SERPENTINE_H2020/Cycle25_Multi-SC_SEP_Event_List/Multi_sc_plots/'
+outpath = '/Users/dresing/Documents/Proposals/SERPENTINE_H2020/Cycle25_Multi-SC_SEP_Event_List/Multi_sc_plots'
 
 dates = pd.date_range(start=first_date, end=last_date, freq=plot_period)
 for startdate in dates.to_pydatetime():
     enddate = startdate + pd.Timedelta(plot_period)
-    outfile = f'{outpath}Multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av.png'
+    outfile = f'{outpath}{os.sep}Multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av.png'
 
     
     if Bepi:
@@ -628,10 +627,9 @@ for startdate in dates.to_pydatetime():
             species = species+'e'
         if plot_p:
             species = species+'p'
-        # plt.savefig(f'{outpath}/multi_sc_{str(startdate)}{species}{averaging}.png')
         plt.savefig(outfile)
         plt.close()
         print('')
-        print('Saved '+f'{outpath}/multi_sc_{str(startdate)}{species}{averaging}.png')
+        print('Saved '+outfile)
     else:
         plt.show()
