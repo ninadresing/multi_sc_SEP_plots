@@ -9,17 +9,18 @@ import datetime as dt
 
 # make selections
 #############################################################
-first_date = dt.datetime(2021, 6, 17)
+first_date = dt.datetime(2021, 6, 18)
+# first_date = dt.datetime(2021, 6, 25)
 last_date = dt.datetime(2021, 12, 30)
 plot_period = '7D'
 averaging = '1H'  # None
 
 Bepi = False  # not included yet!
 PSP = True  
-SOHO = False
-SOLO = False
-STEREO = False
-WIND = False
+SOHO = True
+SOLO = True
+STEREO = True
+WIND = True
 
 
 # SOHO:
