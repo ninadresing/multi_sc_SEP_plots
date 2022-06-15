@@ -9,41 +9,39 @@ import datetime as dt
 
 # make selections
 #############################################################
-first_date = dt.datetime(2021, 1, 29)
-last_date = dt.datetime(2021, 6, 1)
+first_date = dt.datetime(2021, 6, 4)
+last_date = dt.datetime(2021, 12, 30)
 plot_period = '7D'
 averaging = '1H'  # None
 
 Bepi = False  # not included yet!
 PSP = True  
-
 SOHO = True
+SOLO = True
+STEREO = True
+WIND = True
+
+
+# SOHO:
 erne = True
 ephin_p = False  # not included yet!
 ephin_e = False  # not included yet!
 
-SOLO = True
+# SOLO:
 ept = True
 het = True
 ept_use_corr_e = False  # not included yet!
 
-STEREO = True
+#STEREO:
 sept_e = True
 sept_p = False
 stereo_het = True
 let = False
 
-WIND = True
 wind3dp_p = False
 wind3dp_e = True
 #############################################################
 
-
-
-
-
-import glob
-import os
 import sunpy
 import warnings
 
@@ -524,7 +522,7 @@ for startdate in dates.to_pydatetime():
                         drawstyle='steps-mid')
         if WIND:
             # multiply by 1e6 to get per MeV
-            ax.plot(wind3dp_e_df.index, wind3dp_e_df[f'FLUX_{wind3dp_ch_e}']*1e6, color=wind_color, linewidth=linewidth, label='Win/3DP '+str(round(wind3dp_e_df[f'ENERGY_{wind3dp_ch_e}'].mean()/1000., 2)) + ' keV', drawstyle='steps-mid')
+            ax.plot(wind3dp_e_df.index, wind3dp_e_df[f'FLUX_{wind3dp_ch_e}']*1e6, color=wind_color, linewidth=linewidth, label='Wind/3DP '+str(round(wind3dp_e_df[f'ENERGY_{wind3dp_ch_e}'].mean()/1000., 2)) + ' keV', drawstyle='steps-mid')
 
         # ax.set_ylim(7.9e-3, 4.7e1)
         # ax.set_ylim(0.3842003987966555, 6333.090511873226)
