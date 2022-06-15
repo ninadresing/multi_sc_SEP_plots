@@ -4,6 +4,7 @@ June 2022
 this loops over the mission time and creates 
 multi-sc plots to be used for the SERPENTINE 
 multi-sc SEP event catalog
+moved this file to Deepnote June 15 2022
 '''
 import datetime as dt
 
