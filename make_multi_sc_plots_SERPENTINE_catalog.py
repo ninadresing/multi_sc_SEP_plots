@@ -9,17 +9,17 @@ import datetime as dt
 
 # make selections
 #############################################################
-first_date = dt.datetime(2021, 6, 4)
+first_date = dt.datetime(2021, 6, 17)
 last_date = dt.datetime(2021, 12, 30)
 plot_period = '7D'
 averaging = '1H'  # None
 
 Bepi = False  # not included yet!
 PSP = True  
-SOHO = True
-SOLO = True
-STEREO = True
-WIND = True
+SOHO = False
+SOLO = False
+STEREO = False
+WIND = False
 
 
 # SOHO:
@@ -333,6 +333,7 @@ for startdate in dates.to_pydatetime():
     # LOAD DATA
     ##################################################################
     if PSP:
+        print('loading PSP/EPI-HI HET data')
         psp_het, psp_het_energies = psp_isois_load('PSP_ISOIS-EPIHI_L2-HET-RATES60', startdate, enddate, path=psp_path, resample=psp_resample)
         #psp_let1, psp_let1_energies = psp_isois_load('PSP_ISOIS-EPIHI_L2-LET1-RATES60', startdate, enddate, path=psp_path, resample=psp_resample)
         if type(psp_het) == list:
