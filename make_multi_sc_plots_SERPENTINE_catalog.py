@@ -10,8 +10,8 @@ import datetime as dt
 
 # make selections
 #############################################################
-first_date = dt.datetime(2021, 6, 18)
-last_date = dt.datetime(2021, 12, 30)
+first_date = dt.datetime(2019, 6, 11)
+last_date = dt.datetime(2019, 12, 31)
 plot_period = '7D'
 averaging = '1H'  # None
 
@@ -65,6 +65,7 @@ from sunpy.net import Fido
 from sunpy.net import attrs as a
 from sunpy.timeseries import TimeSeries
 from sunpy.util.exceptions import warn_user
+from tqdm import tqdm
 import os
 # omit some warnings
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
@@ -100,7 +101,9 @@ def psp_isois_load(dataset, startdate, enddate, path=None, resample=None):
     ----------
     dataset : {str}
         Name of PSP dataset:
-        - 'PSP_ISOIS-EPIHI_L2-HET-RATES10'
+            - 'PSP_ISOIS-EPIHI_L2-HET-RATES60'
+            - 'PSP_ISOIS-EPIHI_L2-LET1-RATES60'
+            - 'PSP_ISOIS-EPIHI_L2-LET2-RATES60'
     startdate, enddate : {datetime or str}
         Datetime object (e.g., dt.date(2021,12,31) or dt.datetime(2021,4,15)) or "standard"
         datetime string (e.g., "2021/04/15") (enddate must always be later than startdate)
@@ -117,9 +120,22 @@ def psp_isois_load(dataset, startdate, enddate, path=None, resample=None):
     cda_dataset = a.cdaweb.Dataset(dataset)
     try:
         result = Fido.search(trange, cda_dataset)
-        downloaded_files = Fido.fetch(result, path=path)
-        downloaded_files.sort()
+        filelist = [i[0].split('/')[-1] for i in result.show('URL')[0]]
+        filelist.sort()
+        if path is None:
+            filelist = [sunpy.config.get('downloads', 'download_dir') + os.sep + file for file in filelist]
+        elif type(path) is str:
+            filelist = [path + os.sep + f for f in filelist]
+        downloaded_files = filelist
 
+        for i, f in enumerate(filelist):
+            if os.path.exists(f) and os.path.getsize(f) == 0:
+                os.remove(f)
+            if not os.path.exists(f):
+                downloaded_file = Fido.fetch(result[0][i], path=path, max_conn=1)
+
+        # downloaded_files = Fido.fetch(result, path=path, max_conn=1)
+        # downloaded_files.sort()
         data = TimeSeries(downloaded_files, concatenate=True)
         df = data.to_dataframe()
         # df = read_cdf(downloaded_files[0])
@@ -127,7 +143,12 @@ def psp_isois_load(dataset, startdate, enddate, path=None, resample=None):
         # reduce data frame to only H_Flux, H_Uncertainty, Electron_Counts, and Electron_Rate. 
         # There is no Electron_Uncertainty, maybe one could use at least the Poission error from Electron_Counts for that.
         # df = df.filter(like='H_Flux') + df.filter(like='H_Uncertainty') + df.filter(like='Electrons')
-        selected_cols = ["A_H_Flux", "B_H_Flux", "A_H_Uncertainty", "B_H_Uncertainty", "A_Electrons", "B_Electrons"]
+        if dataset.split('-')[2].upper() == 'HET':
+            selected_cols = ["A_H_Flux", "B_H_Flux", "A_H_Uncertainty", "B_H_Uncertainty", "A_Electrons", "B_Electrons"]
+        if dataset.split('-')[2].upper() == 'LET1':
+            selected_cols = ["A_H_Flux", "B_H_Flux", "A_H_Uncertainty", "B_H_Uncertainty", "A_Electrons", "B_Electrons"]
+        if dataset.split('-')[2].upper() == 'LET2':
+            selected_cols = ["A_H_Flux", "B_H_Flux", "A_H_Uncertainty", "B_H_Uncertainty", "A_Electrons", "B_Electrons"]
         df = df[df.columns[df.columns.str.startswith(tuple(selected_cols))]]
 
         cdf = cdflib.CDF(downloaded_files[0])
@@ -258,10 +279,10 @@ plot_e_100 = True
 plot_e_1 = True
 plot_p = True
 save_fig = True
-outpath = '/Users/dresing/Documents/Proposals/SERPENTINE_H2020/Cycle25_Multi-SC_SEP_Event_List/Multi_sc_plots'
+outpath = 'plots'  # '/Users/dresing/Documents/Proposals/SERPENTINE_H2020/Cycle25_Multi-SC_SEP_Event_List/Multi_sc_plots'
 
 dates = pd.date_range(start=first_date, end=last_date, freq=plot_period)
-for startdate in dates.to_pydatetime():
+for startdate in tqdm(dates.to_pydatetime()):
     enddate = startdate + pd.Timedelta(plot_period)
     outfile = f'{outpath}{os.sep}Multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av.png'
 
@@ -282,7 +303,7 @@ for startdate in dates.to_pydatetime():
         soho_erne_color = 'k' #seaborn_colorblind[5]  # 'green'
         # av_soho = av
         soho_erne_resample = averaging  # '30min'
-        soho_path = 'data/'
+        soho_path = '/home/gieseler/uni/soho/data/'
         if erne:
             erne_p_ch = [0]#[4,5]  # 2
         if ephin_e:
@@ -300,7 +321,7 @@ for startdate in dates.to_pydatetime():
         het_ch_p = [19,24]  # [18, 19]
         solo_ept_resample = averaging
         solo_het_resample = averaging
-        solo_path = 'data/'
+        solo_path = '/home/gieseler/uni/solo/data/'
     if STEREO:
         stereo_sept_color = 'orangered' #  seaborn_colorblind[3]  # 
         stereo_het_color = 'orangered' #  seaborn_colorblind[3]  # 'coral'
@@ -314,18 +335,18 @@ for startdate in dates.to_pydatetime():
         sta_het_resample = averaging  
         sta_sept_resample = averaging  
         sta_let_resample = averaging 
-        stereo_path = 'data/'
+        stereo_path = '/home/gieseler/uni/stereo/data/'
     if WIND:
         wind_color = 'dimgrey'  
         wind3dp_ch_e100 = 3
         wind3dp_ch_p = 6
         wind_3dp_resample = averaging  # '30min'
-        wind_path = 'data/'
+        wind_path = '/home/gieseler/uni/wind/data/'
     if PSP:
         psp_het_ch_e = [2,9]
         psp_het_ch_p = [7,8]
 
-        psp_path = '/Users/dresing/data/projects/PSP/'
+        psp_path = '/home/gieseler/uni/psp/data/'
         psp_resample = averaging
         psp_het_color = 'blueviolet'
 
@@ -343,12 +364,12 @@ for startdate in dates.to_pydatetime():
     if WIND:
         if wind3dp_e:
             print('loading wind/3dp e')
-            wind3dp_e_df = wind3dp_load(dataset="WI_SFSP_3DP", startdate=startdate, enddate=enddate, resample=wind_3dp_resample, multi_index=False, path=wind_path)
+            wind3dp_e_df = wind3dp_load(dataset="WI_SFSP_3DP", startdate=startdate, enddate=enddate, resample=wind_3dp_resample, multi_index=False, path=wind_path, max_conn=1)
             wind3dp_ch_e = wind3dp_ch_e100
 
         if wind3dp_p:
             print('loading wind/3dp p')
-            wind3dp_p_df = wind3dp_load(dataset="WI_SOSP_3DP", startdate=startdate, enddate=enddate, resample=wind_3dp_resample, multi_index=False, path=wind_path)
+            wind3dp_p_df = wind3dp_load(dataset="WI_SOSP_3DP", startdate=startdate, enddate=enddate, resample=wind_3dp_resample, multi_index=False, path=wind_path, max_conn=1)
 
 
     if SOLO:
@@ -378,7 +399,7 @@ for startdate in dates.to_pydatetime():
             sta_het_e_labels = ['0.7-1.4 MeV', '1.4-2.8 MeV', '2.8-4.0 MeV']
             sta_het_p_labels = ['13.6-15.1 MeV', '14.9-17.1 MeV', '17.0-19.3 MeV', '20.8-23.8 MeV', '23.8-26.4 MeV', '26.3-29.7 MeV', '29.5-33.4 MeV', '33.4-35.8 MeV', '35.5-40.5 MeV', '40.0-60.0 MeV']
         
-            sta_het_df, sta_het_meta = stereo_load(instrument='het', startdate=startdate, enddate=enddate, spacecraft='sta', resample=sta_het_resample, path=stereo_path)
+            sta_het_df, sta_het_meta = stereo_load(instrument='het', startdate=startdate, enddate=enddate, spacecraft='sta', resample=sta_het_resample, path=stereo_path, max_conn=1)
             st_het_ch_e = st_het_ch_e1
 
         if let:
@@ -386,19 +407,18 @@ for startdate in dates.to_pydatetime():
             # for H and He4:
             let_chstring = ['1.8-2.2 MeV', '2.2-2.7 MeV', '2.7-3.2 MeV', '3.2-3.6 MeV', '3.6-4.0 MeV', '4.0-4.5 MeV', '4.5-5.0 MeV', '5.0-6.0 MeV', '6.0-8.0 MeV', '8.0-10.0 MeV', '10.0-12.0 MeV', '12.0-15.0 MeV']
         
-            sta_let_df, sta_let_meta = stereo_load(instrument='let', startdate=startdate, enddate=enddate, spacecraft='sta', resample=sta_let_resample, path=stereo_path)
+            sta_let_df, sta_let_meta = stereo_load(instrument='let', startdate=startdate, enddate=enddate, spacecraft='sta', resample=sta_let_resample, path=stereo_path, max_conn=1)
         if sept_e:
             print('loading stereo/sept e')
         
-            sta_sept_df_e, sta_sept_dict_e = stereo_load(instrument='sept', startdate=startdate, enddate=enddate, spacecraft='sta', sept_species='e', sept_viewing=sector, resample=sta_sept_resample, path=stereo_path)
+            sta_sept_df_e, sta_sept_dict_e = stereo_load(instrument='sept', startdate=startdate, enddate=enddate, spacecraft='sta', sept_species='e', sept_viewing=sector, resample=sta_sept_resample, path=stereo_path, max_conn=1)
             sept_ch_e = sept_ch_e100
 
         if sept_p:
             print('loading stereo/sept p')
         
-            sta_sept_df_p, sta_sept_dict_p = stereo_load(instrument='sept', startdate=startdate, enddate=enddate, spacecraft='sta', sept_species='p', sept_viewing=sector, resample=sta_sept_resample, path=stereo_path)
-            if type(sept_ch_p) == list:
-                sta_sept_avg_p, sept_chstring_p = calc_av_en_flux_SEPT(sta_sept_df_p, sta_sept_dict_p, sept_ch_p)
+            sta_sept_df_p, sta_sept_dict_p = stereo_load(instrument='sept', startdate=startdate, enddate=enddate, spacecraft='sta', sept_species='p', sept_viewing=sector, resample=sta_sept_resample, path=stereo_path, max_conn=1)
+
         sectors = {'sun': 0, 'asun': 1, 'north': 2, 'south': 3}
         sector_num = sectors[sector]
     if SOHO:
@@ -409,7 +429,7 @@ for startdate in dates.to_pydatetime():
             print('loading soho/erne')
             erne_chstring = ['13-16 MeV', '16-20 MeV', '20-25 MeV', '25-32 MeV', '32-40 MeV', '40-50 MeV', '50-64 MeV', '64-80 MeV', '80-100 MeV', '100-130 MeV']
             # soho_p = ERNE_HED_loader(startdate.year, startdate.timetuple().tm_yday, doy2=enddate.timetuple().tm_yday, av=av_soho)
-            soho_erne, erne_energies = soho_load(dataset="SOHO_ERNE-HED_L2-1MIN", startdate=startdate, enddate=enddate, path=soho_path, resample=soho_erne_resample)
+            soho_erne, erne_energies = soho_load(dataset="SOHO_ERNE-HED_L2-1MIN", startdate=startdate, enddate=enddate, path=soho_path, resample=soho_erne_resample, max_conn=1)
             erne_pro_ch = erne_p_ch         #!!!! to do: implement channel averaging!
 
     if Bepi:
@@ -459,7 +479,18 @@ for startdate in dates.to_pydatetime():
 
     if STEREO:
         if sept_e:
-            sta_sept_avg_e, sept_chstring_e = calc_av_en_flux_SEPT(sta_sept_df_e, sta_sept_dict_e, sept_ch_e)
+            if type(sept_ch_e) == list and len(sta_sept_df_e) > 0:
+                sta_sept_avg_e, sept_chstring_e = calc_av_en_flux_SEPT(sta_sept_df_e, sta_sept_dict_e, sept_ch_e)
+            else:
+                sta_sept_avg_e = []
+                sept_chstring_e = ''
+        
+        if sept_p:
+            if type(sept_ch_p) == list and len(sta_sept_df_p) > 0:
+                sta_sept_avg_p, sept_chstring_p = calc_av_en_flux_SEPT(sta_sept_df_p, sta_sept_dict_p, sept_ch_p)
+            else:
+                sta_sept_avg_p = []
+                sept_chstring_p = ''
             
         if stereo_het:                                                
             sta_het_avg_e, st_het_chstring_e = calc_av_en_flux_ST_HET(sta_het_df.filter(like='Electron'),
@@ -510,10 +541,10 @@ for startdate in dates.to_pydatetime():
                     ax.plot(df_ept_e.index.values, flux_ept, linewidth=linewidth, color=solo_ept_color, label='SOLO\nEPT '+ept_chstring_e+f'\n{sector}', drawstyle='steps-mid')
         if STEREO:
             if sept_e:
-                if type(sept_ch_e) == list:
+                if type(sept_ch_e) == list and len(sta_sept_avg_e) > 0:
                     ax.plot(sta_sept_avg_e.index, sta_sept_avg_e, color=stereo_sept_color, linewidth=linewidth, 
                             label='STEREO/SEPT '+sept_chstring_e+f' {sector}', drawstyle='steps-mid')
-                else:
+                elif type(sept_ch_e) == int:
                     ax.plot(sta_sept_df_e.index, sta_sept_df_e[f'ch_{sept_ch_e}'], color=stereo_sept_color, 
                             linewidth=linewidth, label='STEREO/SEPT '+sta_sept_dict_e.loc[sept_ch_e]['ch_strings']+f' {sector}', drawstyle='steps-mid')
         
@@ -589,9 +620,9 @@ for startdate in dates.to_pydatetime():
                 ax.plot(df_het_p.index, df_het_p, linewidth=linewidth, color=solo_het_color, label='SOLO/HET '+het_chstring_p+f' {sector}', drawstyle='steps-mid')
         if STEREO:
             if sept_p:
-                if type(sept_ch_p) == list:
+                if type(sept_ch_p) == list and len(sta_sept_avg_p) > 0:
                     ax.plot(sta_sept_df_p.index, sta_sept_avg_p, color=stereo_sept_color, linewidth=linewidth, label='STEREO/SEPT '+sept_chstring_p+f' {sector}', drawstyle='steps-mid')
-                else:
+                elif type(sept_ch_p) == int:
                     ax.plot(sta_sept_df_p.index, sta_sept_df_p[f'ch_{sept_ch_p}'], color=stereo_sept_color, linewidth=linewidth, label='STEREO/SEPT '+sta_sept_dict_p.loc[sept_ch_p]['ch_strings']+f' {sector}', drawstyle='steps-mid')
             if stereo_het:
                 ax.plot(sta_het_avg_p.index, sta_het_avg_p, color=stereo_het_color, 
