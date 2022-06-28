@@ -560,8 +560,9 @@ for startdate in tqdm(dates.to_pydatetime()):
                         linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_e][1]+f'/{ephin_e_intercal}',
                         drawstyle='steps-mid')
         if WIND:
-            # multiply by 1e6 to get per MeV
-            ax.plot(wind3dp_e_df.index, wind3dp_e_df[f'FLUX_{wind3dp_ch_e}']*1e6, color=wind_color, linewidth=linewidth, label='Wind/3DP '+str(round(wind3dp_e_df[f'ENERGY_{wind3dp_ch_e}'].mean()/1000., 2)) + ' keV', drawstyle='steps-mid')
+            if len(wind3dp_e_df) > 0:
+                # multiply by 1e6 to get per MeV
+                ax.plot(wind3dp_e_df.index, wind3dp_e_df[f'FLUX_{wind3dp_ch_e}']*1e6, color=wind_color, linewidth=linewidth, label='Wind/3DP '+str(round(wind3dp_e_df[f'ENERGY_{wind3dp_ch_e}'].mean()/1000., 2)) + ' keV', drawstyle='steps-mid')
 
         # ax.set_ylim(7.9e-3, 4.7e1)
         # ax.set_ylim(0.3842003987966555, 6333.090511873226)
@@ -640,7 +641,8 @@ for startdate in tqdm(dates.to_pydatetime()):
                 ax.plot(sta_let_df.index, sta_let_df[f'H_unsec_flux_{let_ch}'], color=stereo_let_color, linewidth=linewidth, label='STERE/LET '+let_chstring[let_ch], drawstyle='steps-mid')
         if SOHO:
             if erne:
-                ax.plot(soho_erne.index, soho_erne[f'PH_{erne_pro_ch}'], color=soho_erne_color, linewidth=linewidth, label='SOHO/ERNE/HED '+erne_chstring[erne_pro_ch], drawstyle='steps-mid')
+                if len(soho_erne) > 0:
+                    ax.plot(soho_erne.index, soho_erne[f'PH_{erne_pro_ch}'], color=soho_erne_color, linewidth=linewidth, label='SOHO/ERNE/HED '+erne_chstring[erne_pro_ch], drawstyle='steps-mid')
             if ephin_p:
                 ax.plot(ephin['date'], ephin[ephin_ch_p][0], color=soho_ephin_color, linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_p][1], drawstyle='steps-mid')
         #if WIND:
