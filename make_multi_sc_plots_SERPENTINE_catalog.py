@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import sunpy
 from matplotlib.ticker import AutoMinorLocator
-from soho_loader import soho_load
+from soho_loader import calc_av_en_flux_ERNE, soho_load
 from solo_epd_loader import epd_load
 from stereo_loader import calc_av_en_flux_HET as calc_av_en_flux_ST_HET
 from stereo_loader import calc_av_en_flux_SEPT, stereo_load
@@ -33,8 +33,8 @@ moved this file to Deepnote June 15 2022
 
 # make selections
 #############################################################
-first_date = dt.datetime(2022, 5, 28)
-last_date = dt.datetime(2022, 6, 27)
+first_date = dt.datetime(2021, 1, 1)
+last_date = dt.datetime(2021, 12, 31)
 plot_period = '7D'
 averaging = '1H'  # None
 
@@ -306,7 +306,7 @@ for startdate in tqdm(dates.to_pydatetime()):
         soho_erne_resample = averaging  # '30min'
         soho_path = '/home/gieseler/uni/soho/data/'
         if erne:
-            erne_p_ch = [0]  # [4,5]  # 2
+            erne_p_ch = [3, 4]  # [0]  # [4,5]  # 2
         if ephin_e:
             ephin_ch_e1 = 'e150'
             ephin_e_intercal = 1/14.
@@ -363,12 +363,12 @@ for startdate in tqdm(dates.to_pydatetime()):
     if WIND:
         if wind3dp_e:
             print('loading wind/3dp e')
-            wind3dp_e_df = wind3dp_load(dataset="WI_SFSP_3DP", startdate=startdate, enddate=enddate, resample=wind_3dp_resample, multi_index=False, path=wind_path, max_conn=1)
+            wind3dp_e_df, wind3dp_e_meta = wind3dp_load(dataset="WI_SFSP_3DP", startdate=startdate, enddate=enddate, resample=wind_3dp_resample, multi_index=False, path=wind_path, max_conn=1)
             wind3dp_ch_e = wind3dp_ch_e100
 
         if wind3dp_p:
             print('loading wind/3dp p')
-            wind3dp_p_df = wind3dp_load(dataset="WI_SOSP_3DP", startdate=startdate, enddate=enddate, resample=wind_3dp_resample, multi_index=False, path=wind_path, max_conn=1)
+            wind3dp_p_df, wind3dp_p_meta = wind3dp_load(dataset="WI_SOSP_3DP", startdate=startdate, enddate=enddate, resample=wind_3dp_resample, multi_index=False, path=wind_path, max_conn=1)
 
     if SOLO:
         data_product = 'l2'
@@ -428,7 +428,6 @@ for startdate in tqdm(dates.to_pydatetime()):
             erne_chstring = ['13-16 MeV', '16-20 MeV', '20-25 MeV', '25-32 MeV', '32-40 MeV', '40-50 MeV', '50-64 MeV', '64-80 MeV', '80-100 MeV', '100-130 MeV']
             # soho_p = ERNE_HED_loader(startdate.year, startdate.timetuple().tm_yday, doy2=enddate.timetuple().tm_yday, av=av_soho)
             soho_erne, erne_energies = soho_load(dataset="SOHO_ERNE-HED_L2-1MIN", startdate=startdate, enddate=enddate, path=soho_path, resample=soho_erne_resample, max_conn=1)
-            erne_pro_ch = erne_p_ch  # !!!! to do: implement channel averaging!
 
     if Bepi:
         print('loading Bepi/SIXS')
@@ -507,8 +506,12 @@ for startdate in tqdm(dates.to_pydatetime()):
                 st_het_chstring_p = ''
     if SOHO:
         if erne:
-            erne_pro_ch = erne_pro_ch[0]  # use this as long as engery averaging is not yet implemented
-            None  # averge energy channel
+            if type(erne_p_ch) == list and len(soho_erne) > 0:
+                soho_erne_avg_p, soho_erne_chstring_p = calc_av_en_flux_ERNE(soho_erne.filter(like='PH_'),
+                                                                             erne_energies['channels_dict_df_p'],
+                                                                             erne_p_ch,
+                                                                             species='p',
+                                                                             sensor='HET')
     if PSP:
         psp_het_ch_p = psp_het_ch_p[0]  # replace with energy channel averaging
         psp_het_ch_e = psp_het_ch_e[0]
@@ -562,7 +565,7 @@ for startdate in tqdm(dates.to_pydatetime()):
         if WIND:
             if len(wind3dp_e_df) > 0:
                 # multiply by 1e6 to get per MeV
-                ax.plot(wind3dp_e_df.index, wind3dp_e_df[f'FLUX_{wind3dp_ch_e}']*1e6, color=wind_color, linewidth=linewidth, label='Wind/3DP '+str(round(wind3dp_e_df[f'ENERGY_{wind3dp_ch_e}'].mean()/1000., 2)) + ' keV', drawstyle='steps-mid')
+                ax.plot(wind3dp_e_df.index, wind3dp_e_df[f'FLUX_{wind3dp_ch_e}']*1e6, color=wind_color, linewidth=linewidth, label='Wind/3DP '+wind3dp_e_meta['channels_dict_df']['Bins_Text'][wind3dp_ch_e], drawstyle='steps-mid')
 
         # ax.set_ylim(7.9e-3, 4.7e1)
         # ax.set_ylim(0.3842003987966555, 6333.090511873226)
@@ -641,8 +644,11 @@ for startdate in tqdm(dates.to_pydatetime()):
                 ax.plot(sta_let_df.index, sta_let_df[f'H_unsec_flux_{let_ch}'], color=stereo_let_color, linewidth=linewidth, label='STERE/LET '+let_chstring[let_ch], drawstyle='steps-mid')
         if SOHO:
             if erne:
-                if len(soho_erne) > 0:
-                    ax.plot(soho_erne.index, soho_erne[f'PH_{erne_pro_ch}'], color=soho_erne_color, linewidth=linewidth, label='SOHO/ERNE/HED '+erne_chstring[erne_pro_ch], drawstyle='steps-mid')
+                if type(erne_p_ch) == list and len(soho_erne_avg_p) > 0:
+                    ax.plot(soho_erne_avg_p.index, soho_erne_avg_p, color=soho_erne_color, linewidth=linewidth, label='SOHO/ERNE/HED '+soho_erne_chstring_p, drawstyle='steps-mid')
+                elif type(erne_p_ch) == int:
+                    if len(soho_erne) > 0:
+                        ax.plot(soho_erne.index, soho_erne[f'PH_{erne_p_ch}'], color=soho_erne_color, linewidth=linewidth, label='SOHO/ERNE/HED '+erne_chstring[erne_p_ch], drawstyle='steps-mid')
             if ephin_p:
                 ax.plot(ephin['date'], ephin[ephin_ch_p][0], color=soho_ephin_color, linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_p][1], drawstyle='steps-mid')
         #if WIND:
