@@ -33,8 +33,8 @@ moved this file to Deepnote June 15 2022
 
 # make selections
 #############################################################
-first_date = dt.datetime(2021, 1, 1)
-last_date = dt.datetime(2021, 12, 31)
+first_date = dt.datetime(2020, 11, 27)
+last_date = dt.datetime(2020, 11, 30)
 plot_period = '7D'
 averaging = '1H'  # None
 
@@ -330,7 +330,7 @@ for startdate in tqdm(dates.to_pydatetime()):
         sector = 'sun'
         sept_ch_e100 = [6, 7]  # [12, 16]
         sept_ch_p = [25, 30]
-        st_het_ch_e1 = [0, 1]
+        st_het_ch_e = [0, 1]
         st_het_ch_p = [5, 8]  # 3  #7 #3
         let_ch = 5  # 1
         sta_het_resample = averaging
@@ -353,12 +353,6 @@ for startdate in tqdm(dates.to_pydatetime()):
 
     # LOAD DATA
     ##################################################################
-    if PSP:
-        print('loading PSP/EPI-HI HET data')
-        psp_het, psp_het_energies = psp_isois_load('PSP_ISOIS-EPIHI_L2-HET-RATES60', startdate, enddate, path=psp_path, resample=psp_resample)
-        # psp_let1, psp_let1_energies = psp_isois_load('PSP_ISOIS-EPIHI_L2-LET1-RATES60', startdate, enddate, path=psp_path, resample=psp_resample)
-        if type(psp_het) == list:
-            print(f'No PSP/HET data for {startdate} - {enddate}')
 
     if WIND:
         if wind3dp_e:
@@ -370,27 +364,6 @@ for startdate in tqdm(dates.to_pydatetime()):
             print('loading wind/3dp p')
             wind3dp_p_df, wind3dp_p_meta = wind3dp_load(dataset="WI_SOSP_3DP", startdate=startdate, enddate=enddate, resample=wind_3dp_resample, multi_index=False, path=wind_path, max_conn=1)
 
-    if SOLO:
-        data_product = 'l2'
-        sdate = startdate
-        edate = enddate
-        if ept:
-            if plot_e_100 or plot_p:
-                print('loading solo/ept e & p')
-                try:
-                    ept_p, ept_e, ept_energies = epd_load(sensor='EPT', viewing=sector, level=data_product, startdate=sdate, enddate=edate, path=solo_path, autodownload=True)
-                except(Exception):
-                    print(f'No SOLO/EPT data for {startdate} - {enddate}')
-                    ept_e = []
-        if het:
-            if plot_e_1 or plot_p:
-                print('loading solo/het e & p')
-                try:
-                    het_p, het_e, het_energies = epd_load(sensor='HET', viewing=sector, level=data_product, startdate=sdate, enddate=edate, path=solo_path, autodownload=True)
-                except(Exception):
-                    print(f'No SOLO/HET data for {startdate} - {enddate}')
-                    het_e = []
-                    het_p = []
     if STEREO:
         if stereo_het:
             print('loading stereo/het')
@@ -398,7 +371,6 @@ for startdate in tqdm(dates.to_pydatetime()):
             sta_het_p_labels = ['13.6-15.1 MeV', '14.9-17.1 MeV', '17.0-19.3 MeV', '20.8-23.8 MeV', '23.8-26.4 MeV', '26.3-29.7 MeV', '29.5-33.4 MeV', '33.4-35.8 MeV', '35.5-40.5 MeV', '40.0-60.0 MeV']
 
             sta_het_df, sta_het_meta = stereo_load(instrument='het', startdate=startdate, enddate=enddate, spacecraft='sta', resample=sta_het_resample, path=stereo_path, max_conn=1)
-            st_het_ch_e = st_het_ch_e1
 
         if let:
             print('loading stereo/let')
@@ -428,6 +400,35 @@ for startdate in tqdm(dates.to_pydatetime()):
             erne_chstring = ['13-16 MeV', '16-20 MeV', '20-25 MeV', '25-32 MeV', '32-40 MeV', '40-50 MeV', '50-64 MeV', '64-80 MeV', '80-100 MeV', '100-130 MeV']
             # soho_p = ERNE_HED_loader(startdate.year, startdate.timetuple().tm_yday, doy2=enddate.timetuple().tm_yday, av=av_soho)
             soho_erne, erne_energies = soho_load(dataset="SOHO_ERNE-HED_L2-1MIN", startdate=startdate, enddate=enddate, path=soho_path, resample=soho_erne_resample, max_conn=1)
+
+    if PSP:
+        print('loading PSP/EPI-HI HET data')
+        psp_het, psp_het_energies = psp_isois_load('PSP_ISOIS-EPIHI_L2-HET-RATES60', startdate, enddate, path=psp_path, resample=psp_resample)
+        # psp_let1, psp_let1_energies = psp_isois_load('PSP_ISOIS-EPIHI_L2-LET1-RATES60', startdate, enddate, path=psp_path, resample=psp_resample)
+        if type(psp_het) == list:
+            print(f'No PSP/HET data for {startdate} - {enddate}')
+
+    if SOLO:
+        data_product = 'l2'
+        sdate = startdate
+        edate = enddate
+        if ept:
+            if plot_e_100 or plot_p:
+                print('loading solo/ept e & p')
+                try:
+                    ept_p, ept_e, ept_energies = epd_load(sensor='EPT', viewing=sector, level=data_product, startdate=sdate, enddate=edate, path=solo_path, autodownload=True)
+                except(Exception):
+                    print(f'No SOLO/EPT data for {startdate} - {enddate}')
+                    ept_e = []
+        if het:
+            if plot_e_1 or plot_p:
+                print('loading solo/het e & p')
+                try:
+                    het_p, het_e, het_energies = epd_load(sensor='HET', viewing=sector, level=data_product, startdate=sdate, enddate=edate, path=solo_path, autodownload=True)
+                except(Exception):
+                    print(f'No SOLO/HET data for {startdate} - {enddate}')
+                    het_e = []
+                    het_p = []
 
     if Bepi:
         print('loading Bepi/SIXS')
@@ -492,7 +493,7 @@ for startdate in tqdm(dates.to_pydatetime()):
         if stereo_het:
             if type(st_het_ch_e) == list and len(sta_het_df) > 0:
                 sta_het_avg_e, st_het_chstring_e = calc_av_en_flux_ST_HET(sta_het_df.filter(like='Electron'),
-                                                                          sta_het_meta['channels_dict_df_p'],
+                                                                          sta_het_meta['channels_dict_df_e'],
                                                                           st_het_ch_e, species='e')
             else:
                 sta_het_avg_e = []
@@ -622,7 +623,7 @@ for startdate in tqdm(dates.to_pydatetime()):
         if PSP:
             if len(psp_het) > 0:
                 ax.plot(psp_het.index, psp_het[f'A_H_Flux_{psp_het_ch_p}'], color=psp_het_color, linewidth=linewidth,
-                        label='PS/HET '+psp_het_energies['H_ENERGY_LABL'][psp_het_ch_p][0].replace(' ', '').replace('-', ' - ').replace('MeV', ' MeV')+' A (sun)',
+                        label='PSP/HET '+psp_het_energies['H_ENERGY_LABL'][psp_het_ch_p][0].replace(' ', '').replace('-', ' - ').replace('MeV', ' MeV')+' A (sun)',
                         drawstyle='steps-mid')
         if Bepi:
             ax.plot(sixs_p.index, sixs_p[sixs_ch_p], color='orange', linewidth=linewidth, label='BepiColombo/SIXS '+sixs_chstrings[sixs_ch_p]+f' side {sixs_side_p}', drawstyle='steps-mid')
