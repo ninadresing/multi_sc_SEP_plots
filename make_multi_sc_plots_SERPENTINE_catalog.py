@@ -33,8 +33,8 @@ moved this file to Deepnote June 15 2022
 
 # make selections
 #############################################################
-first_date = dt.datetime(2020, 11, 27)
-last_date = dt.datetime(2020, 11, 30)
+first_date = dt.datetime(2021, 11, 27)
+last_date = dt.datetime(2021, 11, 30)
 plot_period = '7D'
 averaging = '1H'  # None
 
@@ -202,6 +202,71 @@ def resample_df(df, resample):
     return df
 
 
+def calc_av_en_flux_PSP(df, energies, en_channel, species, instrument, viewing):
+    """
+    This function averages the flux of several energy channels into a combined energy channel
+    channel numbers counted from 0
+
+    Parameters
+    ----------
+    df : pd.DataFrame DataFrame containing HET data
+        DataFrame containing PSP data
+    energies : dict
+        Energy dict returned from psp_loader
+    en_channel : int or list
+        energy channel number(s) to be used
+    species : string
+        'e', 'electrons', 'p', 'i', 'protons', 'ions'
+    instrument : string
+        'epihi-het'
+    viiewing : string
+        'A', 'B'psp
+
+    Returns
+    -------
+    pd.DataFrame
+        flux_out: contains channel-averaged flux
+    """
+    if instrument.lower() == 'epihi-het':
+        if species.lower() in ['e', 'electrons']:
+            species_str = 'Electrons'
+            flux_key = 'Electrons_Rate'
+        if species.lower() in ['p', 'protons', 'i', 'ions', 'h']:
+            species_str = 'H'
+            flux_key = 'H_Flux'
+    if type(en_channel) == list:
+        en_str = energies[f'{species_str}_ENERGY_LABL']
+        energy_low = en_str[en_channel[0]][0].split('-')[0]
+        energy_up = en_str[en_channel[-1]][0].split('-')[-1]
+        en_channel_string = energy_low + '-' + energy_up
+        # replace multiple whitespaces  with single ones:
+        en_channel_string = ' '.join(en_channel_string.split())
+
+        DE = energies[f'{species_str}_ENERGY_DELTAPLUS']+energies[f'{species_str}_ENERGY_DELTAMINUS']
+
+        if len(en_channel) > 2:
+            raise Exception('en_channel must have len 2 or less!')
+        if len(en_channel) == 2:
+            try:
+                df = df[df.columns[df.columns.str.startswith(f'{viewing.upper()}_{flux_key}')]]
+            except (AttributeError, KeyError):
+                None
+            for bins in np.arange(en_channel[0], en_channel[-1]+1):
+                if bins == en_channel[0]:
+                    I_all = df[f'{viewing.upper()}_{flux_key}_{bins}'] * DE[bins]
+                else:
+                    I_all = I_all + df[f'{viewing.upper()}_{flux_key}_{bins}'] * DE[bins]
+            DE_total = np.sum(DE[(en_channel[0]):(en_channel[-1]+1)])
+            flux_out = pd.DataFrame({'flux': I_all/DE_total}, index=df.index)
+        else:
+            en_channel = en_channel[0]
+            flux_out = pd.DataFrame({'flux': df[f'{viewing.upper()}_{flux_key}_{en_channel}']}, index=df.index)
+    else:
+        flux_out = pd.DataFrame({'flux': df[f'{viewing.upper()}_{flux_key}_{en_channel}']}, index=df.index)
+        en_channel_string = en_str[en_channel]
+    return flux_out, en_channel_string
+
+
 def calc_av_en_flux_EPD(df, energies, en_channel, species, instrument):  # original from Nina Slack Feb 9, 2022, rewritten Jan Apr 8, 2022
     """This function averages the flux of several energy channels of HET into a combined energy channel
     channel numbers counted from 0
@@ -344,8 +409,9 @@ for startdate in tqdm(dates.to_pydatetime()):
         wind_3dp_resample = averaging  # '30min'
         wind_path = '/home/gieseler/uni/wind/data/'
     if PSP:
+        psp_het_ch_e100 = [0]  # TODO
         psp_het_ch_e = [2, 9]
-        psp_het_ch_p = [7, 8]
+        psp_het_ch_p = [8, 9]
 
         psp_path = '/home/gieseler/uni/psp/data/'
         psp_resample = averaging
@@ -391,6 +457,7 @@ for startdate in tqdm(dates.to_pydatetime()):
 
         sectors = {'sun': 0, 'asun': 1, 'north': 2, 'south': 3}
         sector_num = sectors[sector]
+
     if SOHO:
         if ephin_e or ephin_p:
             print('loading soho/ephin')
@@ -402,11 +469,11 @@ for startdate in tqdm(dates.to_pydatetime()):
             soho_erne, erne_energies = soho_load(dataset="SOHO_ERNE-HED_L2-1MIN", startdate=startdate, enddate=enddate, path=soho_path, resample=soho_erne_resample, max_conn=1)
 
     if PSP:
-        print('loading PSP/EPI-HI HET data')
-        psp_het, psp_het_energies = psp_isois_load('PSP_ISOIS-EPIHI_L2-HET-RATES60', startdate, enddate, path=psp_path, resample=psp_resample)
+        print('loading PSP/EPIHI-HET data')
+        psp_het, psp_het_energies = psp_isois_load('PSP_ISOIS-EPIHI_L2-HET-RATES60', startdate, enddate, path=psp_path, resample=None)
         # psp_let1, psp_let1_energies = psp_isois_load('PSP_ISOIS-EPIHI_L2-LET1-RATES60', startdate, enddate, path=psp_path, resample=psp_resample)
         if type(psp_het) == list:
-            print(f'No PSP/HET data for {startdate} - {enddate}')
+            print(f'No PSP/EPIHI-HET data for {startdate} - {enddate}')
 
     if SOLO:
         data_product = 'l2'
@@ -514,9 +581,21 @@ for startdate in tqdm(dates.to_pydatetime()):
                                                                              species='p',
                                                                              sensor='HET')
     if PSP:
-        psp_het_ch_p = psp_het_ch_p[0]  # replace with energy channel averaging
-        psp_het_ch_e = psp_het_ch_e[0]
+        if len(psp_het) > 0:
+            if plot_e_1:
+                print('calc_av_en_flux_PSP e 1 MeV')
+                df_psp_het_e, psp_het_chstring_e = calc_av_en_flux_PSP(psp_het, psp_het_energies, psp_het_ch_e, 'e', 'epihi-het', 'A')
+                if isinstance(psp_resample, str):
+                    df_psp_het_e = resample_df(df_psp_het_e, psp_resample)
+            if plot_p:
+                print('calc_av_en_flux_PSP p')
+                df_psp_het_p, psp_het_chstring_p = calc_av_en_flux_PSP(psp_het, psp_het_energies, psp_het_ch_p, 'p', 'epihi-het', 'A')
+                if isinstance(psp_resample, str):
+                    df_psp_het_p = resample_df(df_psp_het_p, psp_resample)
+
     ##########################################################################################
+
+
     panels = 0
     if plot_e_1:
         panels = panels + 1
@@ -588,8 +667,11 @@ for startdate in tqdm(dates.to_pydatetime()):
 
         if PSP:
             if len(psp_het) > 0:
-                ax.plot(psp_het.index, psp_het[f'A_Electrons_Rate_{psp_het_ch_e}'], color=psp_het_color, linewidth=linewidth,
-                        label='COUNT RATES! PSP/HET '+psp_het_energies['Electrons_ENERGY_LABL'][psp_het_ch_p][0].replace(' ', '').replace('-', ' - ').replace('MeV', ' MeV')+' A (sun)',
+                # ax.plot(psp_het.index, psp_het[f'A_Electrons_Rate_{psp_het_ch_e}'], color=psp_het_color, linewidth=linewidth,
+                #         label='PSP '+r"$\bf{(count\ rates)}$"+'\nISOIS-EPIHI-HET '+psp_het_energies['Electrons_ENERGY_LABL'][psp_het_ch_e][0].replace(' ', '').replace('-', ' - ').replace('MeV', ' MeV')+'\nA (sun)',
+                #         drawstyle='steps-mid')
+                ax.plot(df_psp_het_e.index, df_psp_het_e, color=psp_het_color, linewidth=linewidth,
+                        label='PSP '+r"$\bf{(count\ rates)}$"+'\nISOIS-EPIHI-HET '+psp_het_chstring_e+'\nA (sun)',
                         drawstyle='steps-mid')
         if Bepi:
             ax.plot(sixs_e.index, sixs_e[sixs_ch_e100], color='orange', linewidth=linewidth,
@@ -622,8 +704,11 @@ for startdate in tqdm(dates.to_pydatetime()):
             ax = axes[axnum]
         if PSP:
             if len(psp_het) > 0:
-                ax.plot(psp_het.index, psp_het[f'A_H_Flux_{psp_het_ch_p}'], color=psp_het_color, linewidth=linewidth,
-                        label='PSP/HET '+psp_het_energies['H_ENERGY_LABL'][psp_het_ch_p][0].replace(' ', '').replace('-', ' - ').replace('MeV', ' MeV')+' A (sun)',
+                # ax.plot(psp_het.index, psp_het[f'A_H_Flux_{psp_het_ch_p}'], color=psp_het_color, linewidth=linewidth,
+                #         label='PSP '+r"$\bf{(count\ rates)}$"+'\nISOIS-EPIHI-HET '+psp_het_energies['H_ENERGY_LABL'][psp_het_ch_p][0].replace(' ', '').replace('-', ' - ').replace('MeV', ' MeV')+'\nA (sun)',
+                #         drawstyle='steps-mid')
+                ax.plot(df_psp_het_p.index, df_psp_het_p, color=psp_het_color, linewidth=linewidth,
+                        label='PSP '+r"$\bf{(count\ rates)}$"+'\nISOIS-EPIHI-HET '+psp_het_chstring_p+'\nA (sun)',
                         drawstyle='steps-mid')
         if Bepi:
             ax.plot(sixs_p.index, sixs_p[sixs_ch_p], color='orange', linewidth=linewidth, label='BepiColombo/SIXS '+sixs_chstrings[sixs_ch_p]+f' side {sixs_side_p}', drawstyle='steps-mid')
