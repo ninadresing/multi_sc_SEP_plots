@@ -33,8 +33,8 @@ moved this file to Deepnote June 15 2022
 
 # make selections
 #############################################################
-first_date = dt.datetime(2021, 4, 23)
-last_date = dt.datetime(2021, 12, 31)
+first_date = dt.datetime(2021, 1, 1)
+last_date = dt.datetime(2021, 4, 1)
 plot_period = '7D'
 averaging = '1H'  # None
 
@@ -150,111 +150,113 @@ def _cdf2df_3d_psp(cdf, index_key, dtimeindex=True, ignore=None, include=None):
     # Extract index values
     index_info = cdf.varinq(index_key)
     if index_info['Last_Rec'] == -1:
-        warnings.warn('No records present in CDF file')
-
-    index = cdf.varget(index_key)
-    try:
-        # If there are multiple indexes, take the first one
-        # TODO: this is just plain wrong, there should be a way to get all
-        # the indexes out
-        index = index[...][:, 0]
-    except IndexError:
-        pass
-
-    if dtimeindex:
-        index = cdflib.epochs.CDFepoch.breakdown(index, to_np=True)
-        index_df = pd.DataFrame({'year': index[:, 0],
-                                 'month': index[:, 1],
-                                 'day': index[:, 2],
-                                 'hour': index[:, 3],
-                                 'minute': index[:, 4],
-                                 'second': index[:, 5],
-                                 'ms': index[:, 6],
-                                 })
-        # Not all CDFs store pass milliseconds
+        warnings.warn(f"No records present in CDF file {cdf.cdf_info()['CDF'].name}")
+        return_df = pd.DataFrame()
+    else:
+        index = cdf.varget(index_key)
         try:
-            index_df['us'] = index[:, 7]
-            index_df['ns'] = index[:, 8]
+            # If there are multiple indexes, take the first one
+            # TODO: this is just plain wrong, there should be a way to get all
+            # the indexes out
+            index = index[...][:, 0]
         except IndexError:
             pass
-        index = pd.DatetimeIndex(pd.to_datetime(index_df), name='Time')
-    data_dict = {}
-    npoints = len(index)
 
-    var_list = _get_cdf_vars(cdf)
-    keys = {}
-    # Get mapping from each attr to sub-variables
-    for cdf_key in var_list:
-        if ignore:
-            if cdf_key in ignore:
-                continue
-        elif include:
-            if cdf_key not in include:
-                continue
-        if cdf_key == 'Epoch':
-            keys[cdf_key] = 'Time'
-        else:
-            keys[cdf_key] = cdf_key
-    # Remove index key, as we have already used it to create the index
-    keys.pop(index_key)
-    # Remove keys for data that doesn't have the right shape to load in CDF
-    # Mapping of keys to variable data
-    vars = {}
-    for cdf_key in keys.copy():
-        try:
-            vars[cdf_key] = cdf.varget(cdf_key)
-        except ValueError:
-            vars[cdf_key] = ''
-    for cdf_key in keys:
-        var = vars[cdf_key]
-        if type(var) is np.ndarray:
-            key_shape = var.shape
-            if len(key_shape) == 0 or key_shape[0] != npoints:
-                vars.pop(cdf_key)
-        else:
-            vars.pop(cdf_key)
-
-    # Loop through each key and put data into the dataframe
-    for cdf_key in vars:
-        df_key = keys[cdf_key]
-        # Get fill value for this key
-        # First catch string FILLVAL's
-        if type(cdf.varattsget(cdf_key)['FILLVAL']) is str:
-            fillval = cdf.varattsget(cdf_key)['FILLVAL']
-        else:
+        if dtimeindex:
+            index = cdflib.epochs.CDFepoch.breakdown(index, to_np=True)
+            index_df = pd.DataFrame({'year': index[:, 0],
+                                    'month': index[:, 1],
+                                    'day': index[:, 2],
+                                    'hour': index[:, 3],
+                                    'minute': index[:, 4],
+                                    'second': index[:, 5],
+                                    'ms': index[:, 6],
+                                    })
+            # Not all CDFs store pass milliseconds
             try:
-                fillval = float(cdf.varattsget(cdf_key)['FILLVAL'])
-            except KeyError:
-                fillval = np.nan
+                index_df['us'] = index[:, 7]
+                index_df['ns'] = index[:, 8]
+            except IndexError:
+                pass
+            index = pd.DatetimeIndex(pd.to_datetime(index_df), name='Time')
+        data_dict = {}
+        npoints = len(index)
 
-        if isinstance(df_key, list):
-            for i, subkey in enumerate(df_key):
-                data = vars[cdf_key][...][:, i]
-                data = _fillval_nan(data, fillval)
-                data_dict[subkey] = data
-        else:
-            # If ndims is 1, we just have a single column of data
-            # If ndims is 2, have multiple columns of data under same key
-            # If ndims is 3, have multiple columns of data under same key, with 2 sub_keys (e.g., energy and pitch-angle)
-            key_shape = vars[cdf_key].shape
-            ndims = len(key_shape)
-            if ndims == 1:
-                data = vars[cdf_key][...]
-                data = _fillval_nan(data, fillval)
-                data_dict[df_key] = data
-            elif ndims == 2:
-                for i in range(key_shape[1]):
+        var_list = _get_cdf_vars(cdf)
+        keys = {}
+        # Get mapping from each attr to sub-variables
+        for cdf_key in var_list:
+            if ignore:
+                if cdf_key in ignore:
+                    continue
+            elif include:
+                if cdf_key not in include:
+                    continue
+            if cdf_key == 'Epoch':
+                keys[cdf_key] = 'Time'
+            else:
+                keys[cdf_key] = cdf_key
+        # Remove index key, as we have already used it to create the index
+        keys.pop(index_key)
+        # Remove keys for data that doesn't have the right shape to load in CDF
+        # Mapping of keys to variable data
+        vars = {}
+        for cdf_key in keys.copy():
+            try:
+                vars[cdf_key] = cdf.varget(cdf_key)
+            except ValueError:
+                vars[cdf_key] = ''
+        for cdf_key in keys:
+            var = vars[cdf_key]
+            if type(var) is np.ndarray:
+                key_shape = var.shape
+                if len(key_shape) == 0 or key_shape[0] != npoints:
+                    vars.pop(cdf_key)
+            else:
+                vars.pop(cdf_key)
+
+        # Loop through each key and put data into the dataframe
+        for cdf_key in vars:
+            df_key = keys[cdf_key]
+            # Get fill value for this key
+            # First catch string FILLVAL's
+            if type(cdf.varattsget(cdf_key)['FILLVAL']) is str:
+                fillval = cdf.varattsget(cdf_key)['FILLVAL']
+            else:
+                try:
+                    fillval = float(cdf.varattsget(cdf_key)['FILLVAL'])
+                except KeyError:
+                    fillval = np.nan
+
+            if isinstance(df_key, list):
+                for i, subkey in enumerate(df_key):
                     data = vars[cdf_key][...][:, i]
                     data = _fillval_nan(data, fillval)
-                    data_dict[f'{df_key}_{i}'] = data
-            elif ndims == 3:
-                for i in range(key_shape[2]):
-                    for j in range(key_shape[1]):
-                        data = vars[cdf_key][...][:, j, i]
+                    data_dict[subkey] = data
+            else:
+                # If ndims is 1, we just have a single column of data
+                # If ndims is 2, have multiple columns of data under same key
+                # If ndims is 3, have multiple columns of data under same key, with 2 sub_keys (e.g., energy and pitch-angle)
+                key_shape = vars[cdf_key].shape
+                ndims = len(key_shape)
+                if ndims == 1:
+                    data = vars[cdf_key][...]
+                    data = _fillval_nan(data, fillval)
+                    data_dict[df_key] = data
+                elif ndims == 2:
+                    for i in range(key_shape[1]):
+                        data = vars[cdf_key][...][:, i]
                         data = _fillval_nan(data, fillval)
-                        data_dict[f'{df_key}_E{i}_P{j}'] = data
+                        data_dict[f'{df_key}_{i}'] = data
+                elif ndims == 3:
+                    for i in range(key_shape[2]):
+                        for j in range(key_shape[1]):
+                            data = vars[cdf_key][...][:, j, i]
+                            data = _fillval_nan(data, fillval)
+                            data_dict[f'{df_key}_E{i}_P{j}'] = data
+        return_df = pd.DataFrame(index=index, data=data_dict)
 
-    return pd.DataFrame(index=index, data=data_dict)
+    return return_df
 
 
 def psp_isois_load(dataset, startdate, enddate, epilo_channel='F', path=None, resample=None):
@@ -392,7 +394,7 @@ def psp_isois_load(dataset, startdate, enddate, epilo_channel='F', path=None, re
     except RuntimeError:
         print(f'Unable to obtain "{dataset}" data!')
         downloaded_files = []
-        df = []
+        df = pd.DataFrame()
         energies_dict = []
     return df, energies_dict
 
@@ -705,7 +707,8 @@ for startdate in tqdm(dates.to_pydatetime()):
         psp_epilo_channel = 'F'
         psp_epilo_viewing = 3  # 3="sun", 7="antisun"
         psp_path = '/home/gieseler/uni/psp/data/'
-        psp_resample = averaging
+        psp_het_resample = averaging
+        psp_epilo_resample = averaging
         psp_het_color = 'blueviolet'
 
     # LOAD DATA
@@ -763,13 +766,16 @@ for startdate in tqdm(dates.to_pydatetime()):
         print('loading PSP/EPIHI-HET data')
         psp_het, psp_het_energies = psp_isois_load('PSP_ISOIS-EPIHI_L2-HET-RATES60', startdate, enddate, path=psp_path, resample=None)
         # psp_let1, psp_let1_energies = psp_isois_load('PSP_ISOIS-EPIHI_L2-LET1-RATES60', startdate, enddate, path=psp_path, resample=psp_resample)
-        if type(psp_het) == list:
-            print(f'No PSP/EPIHI-HET data for {startdate} - {enddate}')
+        if len(psp_het) == 0:
+            print(f'No PSP/EPIHI-HET 60s data found for {startdate.date()} - {enddate.date()}. Trying 3600s data.')
+            psp_het, psp_het_energies = psp_isois_load('PSP_ISOIS-EPIHI_L2-HET-RATES3600', startdate, enddate, path=psp_path, resample=None)
+            psp_3600 = True
+            psp_het_resample = None
 
         print('loading PSP/EPILO PE data')
         psp_epilo, psp_epilo_energies = psp_isois_load('PSP_ISOIS-EPILO_L2-PE', startdate, enddate, epilo_channel=psp_epilo_channel, path=psp_path, resample=None)
-        if type(psp_epilo) == list:
-            print(f'No PSP/EPILO PE data for {startdate} - {enddate}')
+        if len(psp_epilo) == 0:
+            print(f'No PSP/EPILO PE data for {startdate.date()} - {enddate.date()}')
 
     if SOLO:
         data_product = 'l2'
@@ -781,7 +787,7 @@ for startdate in tqdm(dates.to_pydatetime()):
                 try:
                     ept_p, ept_e, ept_energies = epd_load(sensor='EPT', viewing=sector, level=data_product, startdate=sdate, enddate=edate, path=solo_path, autodownload=True)
                 except(Exception):
-                    print(f'No SOLO/EPT data for {startdate} - {enddate}')
+                    print(f'No SOLO/EPT data for {startdate.date()} - {enddate.date()}')
                     ept_e = []
         if het:
             if plot_e_1 or plot_p:
@@ -789,7 +795,7 @@ for startdate in tqdm(dates.to_pydatetime()):
                 try:
                     het_p, het_e, het_energies = epd_load(sensor='HET', viewing=sector, level=data_product, startdate=sdate, enddate=edate, path=solo_path, autodownload=True)
                 except(Exception):
-                    print(f'No SOLO/HET data for {startdate} - {enddate}')
+                    print(f'No SOLO/HET data for {startdate.date()} - {enddate.date()}')
                     het_e = []
                     het_p = []
 
@@ -881,13 +887,13 @@ for startdate in tqdm(dates.to_pydatetime()):
             if plot_e_1:
                 print('calc_av_en_flux_PSP_EPIHI e 1 MeV')
                 df_psp_het_e, psp_het_chstring_e = calc_av_en_flux_PSP_EPIHI(psp_het, psp_het_energies, psp_het_ch_e, 'e', 'het', 'A')
-                if isinstance(psp_resample, str):
-                    df_psp_het_e = resample_df(df_psp_het_e, psp_resample)
+                if isinstance(psp_het_resample, str):
+                    df_psp_het_e = resample_df(df_psp_het_e, psp_het_resample)
             if plot_p:
                 print('calc_av_en_flux_PSP_EPIHI p')
                 df_psp_het_p, psp_het_chstring_p = calc_av_en_flux_PSP_EPIHI(psp_het, psp_het_energies, psp_het_ch_p, 'p', 'het', 'A')
-                if isinstance(psp_resample, str):
-                    df_psp_het_p = resample_df(df_psp_het_p, psp_resample)
+                if isinstance(psp_het_resample, str):
+                    df_psp_het_p = resample_df(df_psp_het_p, psp_het_resample)
         if len(psp_epilo) > 0:
             if plot_e_100:
                 print('calc_av_en_flux_PSP_EPILO e 100 keV')            
@@ -905,8 +911,8 @@ for startdate in tqdm(dates.to_pydatetime()):
                 # energy_high = energy + en_dict['Electron_ChanF_Energy_DELTAPLUS'].filter(like=f'_E{en_channel}_P{viewing}').values[0]
                 # chstring_e = np.round(energy_low,1).astype(str) + ' - ' + np.round(energy_high,1).astype(str) + ' keV'
 
-                if isinstance(psp_resample, str):
-                    df_psp_epilo_e = resample_df(df_psp_epilo_e, psp_resample)
+                if isinstance(psp_epilo_resample, str):
+                    df_psp_epilo_e = resample_df(df_psp_epilo_e, psp_epilo_resample)
 
     ##########################################################################################
 
