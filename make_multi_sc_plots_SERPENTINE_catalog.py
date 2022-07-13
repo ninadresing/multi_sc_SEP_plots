@@ -33,8 +33,8 @@ moved this file to Deepnote June 15 2022
 
 # make selections
 #############################################################
-first_date = dt.datetime(2021, 1, 1)
-last_date = dt.datetime(2021, 4, 1)
+first_date = dt.datetime(2021, 9, 17)
+last_date = dt.datetime(2021, 9, 18)
 plot_period = '7D'
 averaging = '1H'  # None
 
@@ -259,7 +259,7 @@ def _cdf2df_3d_psp(cdf, index_key, dtimeindex=True, ignore=None, include=None):
     return return_df
 
 
-def psp_isois_load(dataset, startdate, enddate, epilo_channel='F', path=None, resample=None):
+def psp_isois_load(dataset, startdate, enddate, epilo_channel='F', epilo_threshold=None, path=None, resample=None):
     """
     Downloads CDF files via SunPy/Fido from CDAWeb for CELIAS, EPHIN, ERNE onboard SOHO
     Parameters
@@ -275,6 +275,10 @@ def psp_isois_load(dataset, startdate, enddate, epilo_channel='F', path=None, re
     startdate, enddate : {datetime or str}
         Datetime object (e.g., dt.date(2021,12,31) or dt.datetime(2021,4,15)) or "standard"
         datetime string (e.g., "2021/04/15") (enddate must always be later than startdate)
+    epilo_channel : string
+        'E', 'F', 'G'. EPILO chan, by default 'F'
+    epilo_threshold : {int or float}, optional
+        Replace ALL flux/countrate values above 'epilo_threshold' with np.nan, by default None
     path : {str}, optional
         Local path for storing downloaded data, by default None
     resample : {str}, optional
@@ -283,6 +287,10 @@ def psp_isois_load(dataset, startdate, enddate, epilo_channel='F', path=None, re
     -------
     df : {Pandas dataframe}
         See links above for the different datasets for a description of the dataframe columns
+    energies_dict : {dictionary}
+        Dictionary containing energy information.
+        NOTE: For EPIHI energy values are only loaded from the first day of the interval! 
+        For EPILO energy values are the mean of the whole loaded interval.
     """
     trange = a.Time(startdate, enddate)
     cda_dataset = a.cdaweb.Dataset(dataset)
@@ -383,8 +391,20 @@ def psp_isois_load(dataset, startdate, enddate, epilo_channel='F', path=None, re
                           f'Electron_Chan{epilo_channel.upper()}_Energy_DELTAPLUS']:
                     energies_dict[k] = df[df.columns[df.columns.str.startswith(k)]].mean()
                     df.drop(df.columns[df.columns.str.startswith(k)], axis=1, inplace=True)
-                # rename energy column
+                # rename energy column (removing trailing '_E')
                 energies_dict[f'Electron_Chan{epilo_channel.upper()}_Energy'] = energies_dict.pop(f'Electron_Chan{epilo_channel.upper()}_Energy_E')
+
+                # replace outlier data points above given threshold with np.nan
+                # note: df.where(cond, np.nan) replaces all values where the cond is NOT fullfilled with np.nan
+                # following Pandas Dataframe work is not too elegant, but works...
+                if epilo_threshold:
+                    # create new dataframe of FLUX columns only with removed outliers
+                    df2 = df.filter(like='Electron_CountRate_').where(df.filter(like='Electron_CountRate_') <= epilo_threshold, np.nan)
+                    # drop these FLUX columns from original dataframe
+                    flux_cols = df.filter(like='Electron_CountRate_').columns
+                    df.drop(labels=flux_cols, axis=1, inplace=True)
+                    # add cleaned new FLUX columns to original dataframe
+                    df = pd.concat([df2, df], axis=1)
             else:
                 df = ''
                 energies_dict = ''
@@ -451,7 +471,7 @@ def calc_av_en_flux_PSP_EPIHI(df, energies, en_channel, species, instrument, vie
         energy_low = en_str[en_channel[0]][0].split('-')[0]
         energy_up = en_str[en_channel[-1]][0].split('-')[-1]
         en_channel_string = energy_low + '-' + energy_up
-        # replace multiple whitespaces  with single ones:
+        # replace multiple whitespaces with single ones
         en_channel_string = ' '.join(en_channel_string.split())
 
         DE = energies[f'{species_str}_ENERGY_DELTAPLUS']+energies[f'{species_str}_ENERGY_DELTAMINUS']
@@ -698,6 +718,7 @@ for startdate in tqdm(dates.to_pydatetime()):
         wind3dp_ch_e100 = 3
         wind3dp_ch_p = 6
         wind_3dp_resample = averaging  # '30min'
+        wind_3dp_threshold = 1e3/1e6  # None
         wind_path = '/home/gieseler/uni/wind/data/'
     if PSP:
         psp_epilo_ch_e100 = [4, 5]  # cf. psp_epilo_energies
@@ -706,6 +727,7 @@ for startdate in tqdm(dates.to_pydatetime()):
 
         psp_epilo_channel = 'F'
         psp_epilo_viewing = 3  # 3="sun", 7="antisun"
+        psp_epilo_threshold = None  # None
         psp_path = '/home/gieseler/uni/psp/data/'
         psp_het_resample = averaging
         psp_epilo_resample = averaging
@@ -717,7 +739,14 @@ for startdate in tqdm(dates.to_pydatetime()):
     if WIND:
         if wind3dp_e:
             print('loading wind/3dp e')
-            wind3dp_e_df, wind3dp_e_meta = wind3dp_load(dataset="WI_SFSP_3DP", startdate=startdate, enddate=enddate, resample=wind_3dp_resample, multi_index=False, path=wind_path, max_conn=1)
+            wind3dp_e_df, wind3dp_e_meta = wind3dp_load(dataset="WI_SFSP_3DP",
+                                                        startdate=startdate,
+                                                        enddate=enddate,
+                                                        resample=wind_3dp_resample,
+                                                        threshold=wind_3dp_threshold,
+                                                        multi_index=False,
+                                                        path=wind_path,
+                                                        max_conn=1)
             wind3dp_ch_e = wind3dp_ch_e100
 
         if wind3dp_p:
@@ -773,7 +802,11 @@ for startdate in tqdm(dates.to_pydatetime()):
             psp_het_resample = None
 
         print('loading PSP/EPILO PE data')
-        psp_epilo, psp_epilo_energies = psp_isois_load('PSP_ISOIS-EPILO_L2-PE', startdate, enddate, epilo_channel=psp_epilo_channel, path=psp_path, resample=None)
+        psp_epilo, psp_epilo_energies = psp_isois_load('PSP_ISOIS-EPILO_L2-PE',
+                                                       startdate, enddate,
+                                                       epilo_channel=psp_epilo_channel,
+                                                       epilo_threshold=psp_epilo_threshold,
+                                                       path=psp_path, resample=None)
         if len(psp_epilo) == 0:
             print(f'No PSP/EPILO PE data for {startdate.date()} - {enddate.date()}')
 
@@ -897,7 +930,13 @@ for startdate in tqdm(dates.to_pydatetime()):
         if len(psp_epilo) > 0:
             if plot_e_100:
                 print('calc_av_en_flux_PSP_EPILO e 100 keV')            
-                df_psp_epilo_e, psp_epilo_chstring_e = calc_av_en_flux_PSP_EPILO(psp_epilo, psp_epilo_energies, psp_epilo_ch_e100, species='e', mode='pe', chan='F', viewing=psp_epilo_viewing)
+                df_psp_epilo_e, psp_epilo_chstring_e = calc_av_en_flux_PSP_EPILO(psp_epilo,
+                                                                                 psp_epilo_energies,
+                                                                                 psp_epilo_ch_e100,
+                                                                                 species='e',
+                                                                                 mode='pe',
+                                                                                 chan=psp_epilo_channel,
+                                                                                 viewing=psp_epilo_viewing)
 
 
                 # select energy channel
