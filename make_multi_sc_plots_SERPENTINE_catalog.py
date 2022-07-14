@@ -452,7 +452,7 @@ def calc_av_en_flux_PSP_EPIHI(df, energies, en_channel, species, instrument, vie
     instrument : string
         'het'
     viewing : string
-        'A', 'B'psp
+        'A', 'B'
 
     Returns
     -------
@@ -1074,7 +1074,7 @@ for startdate in tqdm(dates.to_pydatetime()):
                 #         label='PSP '+r"$\bf{(count\ rates)}$"+'\nISOIS-EPIHI-HET '+psp_het_energies['H_ENERGY_LABL'][psp_het_ch_p][0].replace(' ', '').replace('-', ' - ').replace('MeV', ' MeV')+'\nA (sun)',
                 #         drawstyle='steps-mid')
                 ax.plot(df_psp_het_p.index, df_psp_het_p, color=psp_het_color, linewidth=linewidth,
-                        label='PSP '+r"$\bf{(count\ rates)}$"+'\nISOIS-EPIHI-HET '+psp_het_chstring_p+'\nA (sun)',
+                        label='PSP '+'\nISOIS-EPIHI-HET '+psp_het_chstring_p+'\nA (sun)',
                         drawstyle='steps-mid')
         if Bepi:
             ax.plot(sixs_p.index, sixs_p[sixs_ch_p], color='orange', linewidth=linewidth, label='BepiColombo/SIXS '+sixs_chstrings[sixs_ch_p]+f' side {sixs_side_p}', drawstyle='steps-mid')
