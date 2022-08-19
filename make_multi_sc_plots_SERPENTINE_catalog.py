@@ -47,9 +47,9 @@ if mode == 'regular':
 averaging = '5min'  # None
 
 Bepi = False  # not included yet!
-PSP = False
+PSP = True
 SOHO = True
-SOLO = False
+SOLO = True
 STEREO = True
 WIND = True
 
@@ -57,7 +57,7 @@ WIND = True
 # SOHO:
 erne = True
 ephin_p = False  # not included yet!
-ephin_e = False  # not included yet!
+ephin_e = True  # not included yet!
 
 # SOLO:
 ept = True
@@ -331,14 +331,15 @@ for i in tqdm(range(len(dates))):
         soho_erne_color = 'k'  # seaborn_colorblind[5]  # 'green'
         # av_soho = av
         soho_erne_resample = averaging  # '30min'
+        soho_ephin_resample = averaging  # '30min'
         soho_path = '/home/gieseler/uni/soho/data/'
         if erne:
             erne_p_ch = [3, 4]  # [0]  # [4,5]  # 2
         if ephin_e:
-            ephin_ch_e1 = 'e150'
-            ephin_e_intercal = 1/14.
-        if ephin_p:
-            ephin_ch_p = 'p25'
+            ephin_ch_e1 = 'E1300'
+            # ephin_e_intercal = 1/14.
+        # if ephin_p:
+        #     ephin_ch_p = 'p25'
     if SOLO:
         solo_ept_color = seaborn_colorblind[5]  # 'blue'
         solo_het_color = seaborn_colorblind[0]  # 'blue' # seaborn_colorblind[1]
@@ -435,7 +436,14 @@ for i in tqdm(range(len(dates))):
     if SOHO:
         if ephin_e or ephin_p:
             print('loading soho/ephin')
-            ephin = eph_rl2_loader(startdate.year, startdate.timetuple().tm_yday, doy2=enddate.timetuple().tm_yday, av=av_soho)
+            # ephin = eph_rl2_loader(startdate.year, startdate.timetuple().tm_yday, doy2=enddate.timetuple().tm_yday, av=av_soho)
+            soho_ephin, ephin_energies = soho_load(dataset="SOHO_COSTEP-EPHIN_L2-1MIN",
+                                                   startdate=startdate,
+                                                   enddate=enddate,
+                                                   path=soho_path,
+                                                   resample=soho_ephin_resample,
+                                                   pos_timestamp='center')
+
         if erne:
             print('loading soho/erne')
             erne_chstring = ['13-16 MeV', '16-20 MeV', '20-25 MeV', '25-32 MeV', '32-40 MeV', '40-50 MeV', '50-64 MeV', '64-80 MeV', '80-100 MeV', '100-130 MeV']
@@ -672,11 +680,11 @@ for i in tqdm(range(len(dates))):
                     [ax.axvline(i, lw=2, color=stereo_sept_color) for i in df_sta_onset_e100]
                     [ax.axvline(i, lw=2, ls=':', color=stereo_sept_color) for i in df_sta_peak_e100]
 
-        if SOHO:
-            if ephin_e:
-                ax.plot(ephin['date'], ephin[ephin_ch_e][0]*ephin_e_intercal, color=soho_ephin_color,
-                        linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_e][1]+f'/{ephin_e_intercal}',
-                        drawstyle='steps-mid')
+        # if SOHO:
+            # if ephin_e:
+            #     ax.plot(ephin['date'], ephin[ephin_ch_e][0]*ephin_e_intercal, color=soho_ephin_color,
+            #             linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_e][1]+f'/{ephin_e_intercal}',
+            #             drawstyle='steps-mid')
         if WIND:
             if len(wind3dp_e_df) > 0:
                 # multiply by 1e6 to get per MeV
@@ -733,7 +741,9 @@ for i in tqdm(range(len(dates))):
                 [ax.axvline(i, lw=2, ls=':', color=stereo_het_color) for i in df_sta_peak_e1000]
         if SOHO:
             if ephin_e:
-                ax.plot(ephin['date'], ephin[ephin_ch_e][0]*ephin_e_intercal, color=soho_ephin_color, linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_e][1]+f'/{ephin_e_intercal}', drawstyle='steps-mid')
+                # ax.plot(ephin['date'], ephin[ephin_ch_e][0]*ephin_e_intercal, color=soho_ephin_color, linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_e][1]+f'/{ephin_e_intercal}', drawstyle='steps-mid')
+                if len(soho_ephin) > 0:
+                    ax.plot(soho_ephin.index, soho_ephin[ephin_ch_e1], color=soho_ephin_color, linewidth=linewidth, label='SOHO/EPHIN '+ephin_energies[ephin_ch_e1], drawstyle='steps-mid')
             if plot_times:
                 [ax.axvline(i, lw=2, color=soho_ephin_color) for i in df_soho_onset_e1000]
                 [ax.axvline(i, lw=2, ls=':', color=soho_ephin_color) for i in df_soho_peak_e1000]
