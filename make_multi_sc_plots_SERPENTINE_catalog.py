@@ -34,10 +34,16 @@ moved this file to Deepnote June 15 2022
 
 # make selections
 #############################################################
-first_date = dt.datetime(2021, 9, 17)
-last_date = dt.datetime(2021, 9, 18)
-plot_period = '7D'
-averaging = '1H'  # None
+
+# processing mode: 'regular' (e.g. weekly) or 'events'
+mode = 'events'
+
+if mode == 'regular':
+    first_date = dt.datetime(2021, 10, 9)
+    last_date = dt.datetime(2021, 10, 9)
+    plot_period = '7D'
+
+averaging = '5min'  # None
 
 Bepi = False  # not included yet!
 PSP = True
@@ -65,6 +71,9 @@ let = False
 
 wind3dp_p = False
 wind3dp_e = True
+
+# plot vertical lines with previously found onset and peak times
+plot_times = True
 #############################################################
 
 # omit some warnings
@@ -174,8 +183,125 @@ plot_p = True
 save_fig = True
 outpath = 'plots'  # '/Users/dresing/Documents/Proposals/SERPENTINE_H2020/Cycle25_Multi-SC_SEP_Event_List/Multi_sc_plots'
 
-dates = pd.date_range(start=first_date, end=last_date, freq=plot_period)
-for startdate in tqdm(dates.to_pydatetime()):
+
+"""
+START LOAD ONSET TIMES
+"""
+if plot_times:
+    # First you have to manually (!) bring spreadsheet in the same form as the example file!!!
+
+    # Load modified spreadhseet
+    df = pd.read_csv('WP2_multi-sc_SEP_event_list_D2.3.csv')
+
+    def get_times_from_csv_list(df, observer):
+        """
+        df_onset_p, df_peak_p, df_onset_e100, df_peak_e100, df_onset_e1000, df_peak_e1000 = get_times_from_csv_list(df, 'SOLO')
+        """
+
+        df_solo = df[df.Observer == observer]
+
+        # protons
+        df_solo_onset_date_p_str = df_solo['PROTONS 25-40 MeV Onset date (yyyy-mm-dd)'].values.astype(str)
+        df_solo_onset_date_p_str = np.delete(df_solo_onset_date_p_str , np.where(df_solo_onset_date_p_str == 'nan'))
+        df_solo_onset_time_p_str = df_solo['PROTONS 25-40 MeV Onset time (HH:MM:SS)'].values.astype(str)
+        df_solo_onset_time_p_str = np.delete(df_solo_onset_time_p_str , np.where(df_solo_onset_time_p_str == 'nan'))
+
+        df_solo_peak_date_p_str = df_solo['PROTONS 25-40 MeV Peak date (yyyy-mm-dd)'].values.astype(str)
+        df_solo_peak_date_p_str = np.delete(df_solo_peak_date_p_str , np.where(df_solo_peak_date_p_str == 'nan'))
+        df_solo_peak_time_p_str = df_solo['PROTONS 25-40 MeV Peak time (HH:MM:SS)'].values.astype(str)
+        df_solo_peak_time_p_str = np.delete(df_solo_peak_time_p_str , np.where(df_solo_peak_time_p_str == 'nan'))
+
+        df_solo_onset_p = []
+        for i in range(len(df_solo_onset_date_p_str)):
+            df_solo_onset_p.append(dt.datetime.strptime(f'{df_solo_onset_date_p_str[i]} {df_solo_onset_time_p_str[i]}', '%Y-%m-%d %H:%M:%S'))
+            # print(f'{df_solo_onset_date_p_str[i]} {df_solo_onset_time_p_str[i]} => {df_solo_onset_p[i]}')
+
+        df_solo_peak_p = []
+        for i in range(len(df_solo_peak_date_p_str)):
+            df_solo_peak_p.append(dt.datetime.strptime(f'{df_solo_peak_date_p_str[i]} {df_solo_peak_time_p_str[i]}', '%Y-%m-%d %H:%M:%S'))
+            # print(f'{df_solo_peak_date_p_str[i]} {df_solo_peak_time_p_str[i]} => {df_solo_peak_p[i]}')
+
+        # 100 keV electrons
+        df_solo_onset_date_e100_str = df_solo['ELECTRONS 100 keV Onset date (yyyy-mm-dd)'].values.astype(str)
+        df_solo_onset_date_e100_str = np.delete(df_solo_onset_date_e100_str , np.where(df_solo_onset_date_e100_str == 'nan'))
+        df_solo_onset_time_e100_str = df_solo['ELECTRONS 100 keV Onset time (HH:MM:SS)'].values.astype(str)
+        df_solo_onset_time_e100_str = np.delete(df_solo_onset_time_e100_str , np.where(df_solo_onset_time_e100_str == 'nan'))
+
+        df_solo_peak_date_e100_str = df_solo['ELECTRONS 100 keV Peak date (yyyy-mm-dd)'].values.astype(str)
+        df_solo_peak_date_e100_str = np.delete(df_solo_peak_date_e100_str , np.where(df_solo_peak_date_e100_str == 'nan'))
+        df_solo_peak_time_e100_str = df_solo['ELECTRONS 100 keV Peak time (HH:MM:SS)'].values.astype(str)
+        df_solo_peak_time_e100_str = np.delete(df_solo_peak_time_e100_str , np.where(df_solo_peak_time_e100_str == 'nan'))
+
+        df_solo_onset_e100 = []
+        for i in range(len(df_solo_onset_date_e100_str)):
+            df_solo_onset_e100.append(dt.datetime.strptime(f'{df_solo_onset_date_e100_str[i]} {df_solo_onset_time_e100_str[i]}', '%Y-%m-%d %H:%M:%S'))
+            # print(f'{df_solo_onset_date_e100_str[i]} {df_solo_onset_time_e100_str[i]} => {df_solo_onset_e100[i]}')
+
+        df_solo_peak_e100 = []
+        for i in range(len(df_solo_peak_date_e100_str)):
+            df_solo_peak_e100.append(dt.datetime.strptime(f'{df_solo_peak_date_e100_str[i]} {df_solo_peak_time_e100_str[i]}', '%Y-%m-%d %H:%M:%S'))
+            # print(f'{df_solo_peak_date_e100_str[i]} {df_solo_peak_time_e100_str[i]} => {df_solo_peak_e100[i]}')
+
+        # 1000 keV (1 MeV) electrons
+        df_solo_onset_date_e1000_str = df_solo['ELECTRONS 1 MeV Onset date (yyyy-mm-dd)'].values.astype(str)
+        df_solo_onset_date_e1000_str = np.delete(df_solo_onset_date_e1000_str , np.where(df_solo_onset_date_e1000_str == 'nan'))
+        df_solo_onset_time_e1000_str = df_solo['ELECTRONS 1 MeV Onset time (HH:MM:SS)'].values.astype(str)
+        df_solo_onset_time_e1000_str = np.delete(df_solo_onset_time_e1000_str , np.where(df_solo_onset_time_e1000_str == 'nan'))
+
+        df_solo_peak_date_e1000_str = df_solo['ELECTRONS 1 MeV Peak date (yyyy-mm-dd)'].values.astype(str)
+        df_solo_peak_date_e1000_str = np.delete(df_solo_peak_date_e1000_str , np.where(df_solo_peak_date_e1000_str == 'nan'))
+        df_solo_peak_time_e1000_str = df_solo['ELECTRONS 1 MeV Peak time (HH:MM:SS)'].values.astype(str)
+        df_solo_peak_time_e1000_str = np.delete(df_solo_peak_time_e1000_str , np.where(df_solo_peak_time_e1000_str == 'nan'))
+
+        df_solo_onset_e1000 = []
+        for i in range(len(df_solo_onset_date_e1000_str)):
+            df_solo_onset_e1000.append(dt.datetime.strptime(f'{df_solo_onset_date_e1000_str[i]} {df_solo_onset_time_e1000_str[i]}', '%Y-%m-%d %H:%M:%S'))
+            # print(f'{df_solo_onset_date_e1000_str[i]} {df_solo_onset_time_e1000_str[i]} => {df_solo_onset_e1000[i]}')
+
+        df_solo_peak_e1000 = []
+        for i in range(len(df_solo_peak_date_e1000_str)):
+            df_solo_peak_e1000.append(dt.datetime.strptime(f'{df_solo_peak_date_e1000_str[i]} {df_solo_peak_time_e1000_str[i]}', '%Y-%m-%d %H:%M:%S'))
+            # print(f'{df_solo_peak_date_e1000_str[i]} {df_solo_peak_time_e1000_str[i]} => {df_solo_peak_e1000[i]}')
+
+        return df_solo_onset_p, df_solo_peak_p, df_solo_onset_e100, df_solo_peak_e100, df_solo_onset_e1000, df_solo_peak_e1000
+
+    df_solo_onset_p, df_solo_peak_p, df_solo_onset_e100, df_solo_peak_e100, df_solo_onset_e1000, df_solo_peak_e1000 = get_times_from_csv_list(df, 'SOLO')
+    df_sta_onset_p, df_sta_peak_p, df_sta_onset_e100, df_sta_peak_e100, df_sta_onset_e1000, df_sta_peak_e1000 = get_times_from_csv_list(df, 'STEREO-A')
+    df_psp_onset_p, df_psp_peak_p, df_psp_onset_e100, df_psp_peak_e100, df_psp_onset_e1000, df_psp_peak_e1000 = get_times_from_csv_list(df, 'PSP')
+    df_wind_onset_p, df_wind_peak_p, df_wind_onset_e100, df_wind_peak_e100, df_wind_onset_e1000, df_wind_peak_e1000 = get_times_from_csv_list(df, 'Wind')
+    df_soho_onset_p, df_soho_peak_p, df_soho_onset_e100, df_soho_peak_e100, df_soho_onset_e1000, df_soho_peak_e1000 = get_times_from_csv_list(df, 'SOHO')
+
+    # obtain a list of all onset datetime
+    all_onsets = df_solo_onset_p + df_solo_onset_e100 + df_solo_onset_e1000 + df_sta_onset_p + df_sta_onset_e100 + df_sta_onset_e1000 + df_psp_onset_p + df_psp_onset_e100 + df_psp_onset_e1000 + df_wind_onset_p + df_wind_onset_e100 + df_wind_onset_e1000 + df_soho_onset_p + df_soho_onset_e100 + df_soho_onset_e1000
+    all_onsets.sort()
+    # obtain a list of all onset dates
+    all_onset_dates_org = np.array([i.date() for i in all_onsets])
+    all_onset_dates_org.sort()
+    # remove duplicates
+    all_onset_dates = np.array([*set(all_onset_dates_org)])
+    all_onset_dates.sort()  # <--really needed!
+    # obtain list of datetimes with only the earliest onset time for each date
+    all_onset_dates_first = []
+    for i, date in enumerate(all_onset_dates):
+        all_onset_dates_first.append(all_onsets[np.where(all_onset_dates_org == date)[0][0]])
+
+
+"""
+END LOAD ONSET TIMES
+"""
+
+if mode == 'regular':
+    dates = pd.date_range(start=first_date, end=last_date, freq=plot_period)
+if mode == 'events':
+    dates = all_onset_dates_first
+# for startdate in tqdm(dates.to_pydatetime()):
+for i in tqdm(range(len(dates))):
+    print(i, dates[i])
+    if mode == 'regular':
+        startdate = dates[i].to_pydatetime()
+    if mode == 'events':
+        startdate = dt.datetime.fromisoformat(dates[i].isoformat()) - pd.Timedelta('2h')
+        plot_period = ('48h')
     enddate = startdate + pd.Timedelta(plot_period)
     outfile = f'{outpath}{os.sep}Multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av.png'
 
@@ -233,7 +359,7 @@ for startdate in tqdm(dates.to_pydatetime()):
         wind3dp_ch_e100 = 3
         wind3dp_ch_p = 6
         wind_3dp_resample = averaging  # '30min'
-        wind_3dp_threshold = 1e3/1e6  # None
+        wind_3dp_threshold = None  # 1e3/1e6  # None
         wind_path = '/home/gieseler/uni/wind/data/'
     if PSP:
         psp_epilo_ch_e100 = [4, 5]  # cf. psp_epilo_energies
@@ -242,7 +368,7 @@ for startdate in tqdm(dates.to_pydatetime()):
 
         psp_epilo_channel = 'F'
         psp_epilo_viewing = 3  # 3="sun", 7="antisun"
-        psp_epilo_threshold = None  # None
+        psp_epilo_threshold = None  # 1e2  # None
         psp_path = '/home/gieseler/uni/psp/data/'
         psp_het_resample = averaging
         psp_epilo_resample = averaging
@@ -498,6 +624,9 @@ for startdate in tqdm(dates.to_pydatetime()):
                 ax.plot(df_psp_epilo_e.index, df_psp_epilo_e*100, color=psp_het_color, linewidth=linewidth,
                         label='PSP '+r"$\bf{(count\ rate\ *100)}$"+'\nISOIS-EPILO '+psp_epilo_chstring_e+f'\nF (W{psp_epilo_viewing})',
                         drawstyle='steps-mid')
+            if plot_times:
+                [ax.axvline(i, lw=2, color=psp_het_color) for i in df_psp_onset_e100]
+                [ax.axvline(i, lw=2, ls=':', color=psp_het_color) for i in df_psp_peak_e100]    
 
         if Bepi:
             ax.plot(sixs_e.index, sixs_e[sixs_ch_e], color='orange', linewidth=linewidth, label='BepiColombo\nSIXS '+sixs_chstrings[sixs_ch_e]+f'\nside {sixs_side_e}', drawstyle='steps-mid')
@@ -509,6 +638,9 @@ for startdate in tqdm(dates.to_pydatetime()):
                         ax.plot(df_ept_e.index.values, flux_ept[:, ch], linewidth=linewidth, color=solo_ept_color, label='SOLO\nEPT '+ept_en_str_e[ch, 0]+f'\n{sector}', drawstyle='steps-mid')
                 except IndexError:
                     ax.plot(df_ept_e.index.values, flux_ept, linewidth=linewidth, color=solo_ept_color, label='SOLO\nEPT '+ept_chstring_e+f'\n{sector}', drawstyle='steps-mid')
+            if plot_times:
+                [ax.axvline(i, lw=2, color=solo_ept_color) for i in df_solo_onset_e100]
+                [ax.axvline(i, lw=2, ls=':', color=solo_ept_color) for i in df_solo_peak_e100]
         if STEREO:
             if sept_e:
                 if type(sept_ch_e) == list and len(sta_sept_avg_e) > 0:
@@ -517,6 +649,9 @@ for startdate in tqdm(dates.to_pydatetime()):
                 elif type(sept_ch_e) == int:
                     ax.plot(sta_sept_df_e.index, sta_sept_df_e[f'ch_{sept_ch_e}'], color=stereo_sept_color,
                             linewidth=linewidth, label='STEREO/SEPT '+sta_sept_dict_e.loc[sept_ch_e]['ch_strings']+f' {sector}', drawstyle='steps-mid')
+                if plot_times:
+                    [ax.axvline(i, lw=2, color=stereo_sept_color) for i in df_sta_onset_e100]
+                    [ax.axvline(i, lw=2, ls=':', color=stereo_sept_color) for i in df_sta_peak_e100]
 
         if SOHO:
             if ephin_e:
@@ -527,6 +662,9 @@ for startdate in tqdm(dates.to_pydatetime()):
             if len(wind3dp_e_df) > 0:
                 # multiply by 1e6 to get per MeV
                 ax.plot(wind3dp_e_df.index, wind3dp_e_df[f'FLUX_{wind3dp_ch_e}']*1e6, color=wind_color, linewidth=linewidth, label='Wind/3DP '+wind3dp_e_meta['channels_dict_df']['Bins_Text'][wind3dp_ch_e], drawstyle='steps-mid')
+            if plot_times:
+                [ax.axvline(i, lw=2, color=wind_color) for i in df_wind_onset_e100]
+                [ax.axvline(i, lw=2, ls=':', color=wind_color) for i in df_wind_peak_e100]
 
         # ax.set_ylim(7.9e-3, 4.7e1)
         # ax.set_ylim(0.3842003987966555, 6333.090511873226)
@@ -554,20 +692,32 @@ for startdate in tqdm(dates.to_pydatetime()):
                 ax.plot(df_psp_het_e.index, df_psp_het_e*10, color=psp_het_color, linewidth=linewidth,
                         label='PSP '+r"$\bf{(count\ rate\ *10)}$"+'\nISOIS-EPIHI-HET '+psp_het_chstring_e+'\nA (sun)',
                         drawstyle='steps-mid')
+            if plot_times:
+                [ax.axvline(i, lw=2, color=psp_het_color) for i in df_psp_onset_e1000] 
+                [ax.axvline(i, lw=2, ls=':', color=psp_het_color) for i in df_psp_peak_e1000] 
         if Bepi:
             ax.plot(sixs_e.index, sixs_e[sixs_ch_e100], color='orange', linewidth=linewidth,
                     label='Bepi/SIXS '+sixs_chstrings[sixs_ch_e100]+f' side {sixs_side_e}', drawstyle='steps-mid')
         if SOLO:
             if het and (len(het_e) > 0):
                 ax.plot(df_het_e.index.values, df_het_e.flux, linewidth=linewidth, color=solo_het_color, label='SOLO/HET '+het_chstring_e+f' {sector}', drawstyle='steps-mid')
+            if plot_times:
+                [ax.axvline(i, lw=2, color=solo_het_color) for i in df_solo_onset_e1000] 
+                [ax.axvline(i, lw=2, ls=':', color=solo_het_color) for i in df_solo_peak_e1000] 
         if STEREO:
             if stereo_het:
                 if len(sta_het_avg_e) > 0:
                     ax.plot(sta_het_avg_e.index, sta_het_avg_e, color=stereo_het_color, linewidth=linewidth,
                             label='STEREO/HET '+st_het_chstring_e, drawstyle='steps-mid')
+            if plot_times:
+                [ax.axvline(i, lw=2, color=stereo_het_color) for i in df_sta_onset_e1000]
+                [ax.axvline(i, lw=2, ls=':', color=stereo_het_color) for i in df_sta_peak_e1000]
         if SOHO:
             if ephin_e:
                 ax.plot(ephin['date'], ephin[ephin_ch_e][0]*ephin_e_intercal, color=soho_ephin_color, linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_e][1]+f'/{ephin_e_intercal}', drawstyle='steps-mid')
+            if plot_times:
+                [ax.axvline(i, lw=2, color=soho_ephin_color) for i in df_soho_onset_e1000]
+                [ax.axvline(i, lw=2, ls=':', color=soho_ephin_color) for i in df_soho_peak_e1000]
 
         # ax.set_ylim(7.9e-3, 4.7e1)
         # ax.set_ylim(0.3842003987966555, 6333.090511873226)
@@ -591,11 +741,17 @@ for startdate in tqdm(dates.to_pydatetime()):
                 ax.plot(df_psp_het_p.index, df_psp_het_p, color=psp_het_color, linewidth=linewidth,
                         label='PSP '+'\nISOIS-EPIHI-HET '+psp_het_chstring_p+'\nA (sun)',
                         drawstyle='steps-mid')
+            if plot_times:
+                [ax.axvline(i, lw=2, color=psp_het_color) for i in df_psp_onset_p]
+                [ax.axvline(i, lw=2, ls=':', color=psp_het_color) for i in df_psp_peak_p]
         if Bepi:
             ax.plot(sixs_p.index, sixs_p[sixs_ch_p], color='orange', linewidth=linewidth, label='BepiColombo/SIXS '+sixs_chstrings[sixs_ch_p]+f' side {sixs_side_p}', drawstyle='steps-mid')
         if SOLO:
             if het and (len(ept_e) > 0):
                 ax.plot(df_het_p.index, df_het_p, linewidth=linewidth, color=solo_het_color, label='SOLO/HET '+het_chstring_p+f' {sector}', drawstyle='steps-mid')
+            if plot_times:
+                [ax.axvline(i, lw=2, color=solo_het_color) for i in df_solo_onset_p]
+                [ax.axvline(i, lw=2, ls=':', color=solo_het_color) for i in df_solo_peak_p]
         if STEREO:
             if sept_p:
                 if type(sept_ch_p) == list and len(sta_sept_avg_p) > 0:
@@ -609,6 +765,9 @@ for startdate in tqdm(dates.to_pydatetime()):
             if let:
                 str_ch = {0: 'P1', 1: 'P2', 2: 'P3', 3: 'P4'}
                 ax.plot(sta_let_df.index, sta_let_df[f'H_unsec_flux_{let_ch}'], color=stereo_let_color, linewidth=linewidth, label='STERE/LET '+let_chstring[let_ch], drawstyle='steps-mid')
+            if plot_times:
+                [ax.axvline(i, lw=2, color=stereo_het_color) for i in df_sta_onset_p]
+                [ax.axvline(i, lw=2, ls=':', color=stereo_het_color) for i in df_sta_peak_p]
         if SOHO:
             if erne:
                 if type(erne_p_ch) == list and len(soho_erne_avg_p) > 0:
@@ -618,6 +777,9 @@ for startdate in tqdm(dates.to_pydatetime()):
                         ax.plot(soho_erne.index, soho_erne[f'PH_{erne_p_ch}'], color=soho_erne_color, linewidth=linewidth, label='SOHO/ERNE/HED '+erne_chstring[erne_p_ch], drawstyle='steps-mid')
             if ephin_p:
                 ax.plot(ephin['date'], ephin[ephin_ch_p][0], color=soho_ephin_color, linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_p][1], drawstyle='steps-mid')
+            if plot_times:
+                [ax.axvline(i, lw=2, color=soho_erne_color) for i in df_soho_onset_p]
+                [ax.axvline(i, lw=2, ls=':', color=soho_erne_color) for i in df_soho_peak_p]
         #if WIND:
             # multiply by 1e6 to get per MeV
         #    ax.plot(wind3dp_p_df.index, wind3dp_p_df[f'FLUX_{wind3dp_ch_p}']*1e6, color=wind_color, linewidth=linewidth, label='Wind\n3DP '+str(round(wind3dp_p_df[f'ENERGY_{wind3dp_ch_p}'].mean()/1000., 2)) + ' keV', drawstyle='steps-mid')
@@ -631,6 +793,7 @@ for startdate in tqdm(dates.to_pydatetime()):
     # dist = np.round(pos.radius.value, 2)
     # fig.suptitle(f'Solar Orbiter/EPD {sector} (R={dist} au)')
     ax.set_xlim(startdate, enddate)
+    # ax.set_xlim(dt.datetime(2021, 10, 9, 6, 0), dt.datetime(2021, 10, 9, 11, 0))
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d\n%H:%M'))
     ax.xaxis.set_minor_locator(AutoMinorLocator(2))
     ax.set_xlabel('Date / Time in year '+str(startdate.year))
