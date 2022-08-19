@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import sunpy
 from matplotlib.ticker import AutoMinorLocator
+from matplotlib.transforms import blended_transform_factory
 from psp_isois_loader import calc_av_en_flux_PSP_EPIHI, calc_av_en_flux_PSP_EPILO, psp_isois_load, resample_df
 from soho_loader import calc_av_en_flux_ERNE, soho_load
 from solo_epd_loader import epd_load
@@ -46,9 +47,9 @@ if mode == 'regular':
 averaging = '5min'  # None
 
 Bepi = False  # not included yet!
-PSP = True
+PSP = False
 SOHO = True
-SOLO = True
+SOLO = False
 STEREO = True
 WIND = True
 
@@ -193,6 +194,15 @@ if plot_times:
     # Load modified spreadhseet
     df = pd.read_csv('WP2_multi-sc_SEP_event_list_D2.3.csv')
 
+    # get list of flare times
+    df_flare_date_str = df['flare date\n(yyyy-mm-dd)'].values.astype(str)
+    df_flare_date_str = np.delete(df_flare_date_str , np.where(df_flare_date_str == 'nan'))
+    df_flare_times_str = df['flare time\n(HH:MM:SS)'].values.astype(str)
+    df_flare_times_str = np.delete(df_flare_times_str , np.where(df_flare_times_str == 'nan'))
+    df_flare_times = []
+    for i in range(len(df_flare_date_str)):
+        df_flare_times.append(dt.datetime.strptime(f'{df_flare_date_str[i]} {df_flare_times_str[i]}', '%Y-%m-%d %H:%M:%S'))
+
     def get_times_from_csv_list(df, observer):
         """
         df_onset_p, df_peak_p, df_onset_e100, df_peak_e100, df_onset_e1000, df_peak_e1000 = get_times_from_csv_list(df, 'SOLO')
@@ -285,7 +295,6 @@ if plot_times:
     for i, date in enumerate(all_onset_dates):
         all_onset_dates_first.append(all_onsets[np.where(all_onset_dates_org == date)[0][0]])
 
-
 """
 END LOAD ONSET TIMES
 """
@@ -296,11 +305,12 @@ if mode == 'events':
     dates = all_onset_dates_first
 # for startdate in tqdm(dates.to_pydatetime()):
 for i in tqdm(range(len(dates))):
+    # i=0
     print(i, dates[i])
     if mode == 'regular':
         startdate = dates[i].to_pydatetime()
     if mode == 'events':
-        startdate = dt.datetime.fromisoformat(dates[i].isoformat()) - pd.Timedelta('2h')
+        startdate = dt.datetime.fromisoformat(dates[i].isoformat()) - pd.Timedelta('5h')
         plot_period = ('48h')
     enddate = startdate + pd.Timedelta(plot_period)
     outfile = f'{outpath}{os.sep}Multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av.png'
@@ -618,6 +628,15 @@ for i in tqdm(range(len(dates))):
         species_string = 'Electrons'
         if ept_use_corr_e:
             species_string = 'Electrons (corrected)'
+
+        # plot flare times with arrows on top
+        if mode == 'events':   
+            trans = blended_transform_factory(x_transform=ax.transData, y_transform=ax.transAxes)
+            ind = np.where((np.array(df_flare_times) < enddate) & (np.array(df_flare_times) > startdate))
+            [ax.annotate('', 
+                         xy=[mdates.date2num(i), 1.0], xycoords=trans,
+                         xytext=[mdates.date2num(i), 1.07], textcoords=trans,
+                         arrowprops=dict(arrowstyle="->", lw=2)) for i in np.array(df_flare_times)[ind]]
 
         if PSP:
             if len(psp_epilo) > 0:
