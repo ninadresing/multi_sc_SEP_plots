@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import sunpy
 from matplotlib.ticker import AutoMinorLocator
+from matplotlib.transforms import blended_transform_factory
 from psp_isois_loader import calc_av_en_flux_PSP_EPIHI, calc_av_en_flux_PSP_EPILO, psp_isois_load, resample_df
 from soho_loader import calc_av_en_flux_ERNE, soho_load
 from solo_epd_loader import epd_load
@@ -39,13 +40,15 @@ moved this file to Deepnote June 15 2022
 mode = 'events'
 
 if mode == 'regular':
-    first_date = dt.datetime(2021, 10, 9)
-    last_date = dt.datetime(2021, 10, 9)
+    first_date = dt.datetime(2021, 4, 15)
+    last_date = dt.datetime(2021, 4, 15)
     plot_period = '7D'
+    averaging = '1h'  # '5min'  # None
 
-averaging = '5min'  # None
+if mode == 'events':
+    averaging = '5min'  # None
 
-Bepi = False  # not included yet!
+Bepi = True
 PSP = True
 SOHO = True
 SOLO = True
@@ -56,7 +59,7 @@ WIND = True
 # SOHO:
 erne = True
 ephin_p = False  # not included yet!
-ephin_e = False  # not included yet!
+ephin_e = True  # not included yet!
 
 # SOLO:
 ept = True
@@ -173,6 +176,111 @@ def calc_av_en_flux_EPD(df, energies, en_channel, species, instrument):  # origi
     return flux_out, en_channel_string
 
 
+def bepicolombo_sixs_stack(path, date, side):
+    # def bepicolombo_sixs_stack(path, date, side, species):
+
+    # side is the index of the file here
+    try:
+        try:
+            filename = f"{path}/sixs_phys_data_{date}_side{side}.csv"
+            df = pd.read_csv(filename)
+        except FileNotFoundError:
+            # try alternative file name format
+            filename = f"{path}/{date.strftime('%Y%m%d')}_side{side}.csv"
+            df = pd.read_csv(filename)
+            times = pd.to_datetime(df['TimeUTC'])
+
+        # list comprehension because the method can't be applied onto the array "times"
+        times = [t.tz_convert(None) for t in times]
+        df.index = np.array(times)
+        df = df.drop(columns=['TimeUTC'])
+
+        # choose the subset of desired particle species
+        # if species=="ion":
+        #     df = df[[f"P{i}" for i in range(1,10)]]
+        # if species=="ele":
+        #     df = df[[f"E{i}" for i in range(1,8)]]
+
+    except FileNotFoundError:
+        print(f'Unable to open {filename}')
+        df = pd.DataFrame()
+        filename = ''
+
+    return df, filename
+
+
+def bepi_sixs_load(startdate, enddate, side, path):
+    dates = pd.date_range(startdate, enddate)
+
+    # read files into Pandas dataframes:
+    df, file = bepicolombo_sixs_stack(path, startdate, side=side)
+    if len(dates) > 1:
+        for date in dates[1:]:
+            t_df, file = bepicolombo_sixs_stack(path, date.date(), side=side)
+            df = pd.concat([df, t_df])
+
+    channels_dict = {"Energy_Bin_str": {'E1': '71 keV', 'E2': '106 keV', 'E3': '169 keV', 'E4': '280 keV', 'E5': '960 keV', 'E6': '2240 keV', 'E7': '8170 keV',
+                                        'P1': '1.1 MeV', 'P2': '1.2 MeV', 'P3': '1.5 MeV', 'P4': '2.3 MeV', 'P5': '4.0 MeV', 'P6': '8.0 MeV', 'P7': '15.0 MeV', 'P8': '25.1 MeV', 'P9': '37.3 MeV'},
+                     "Electron_Bins_Low_Energy": np.array([55, 78, 134, 235, 1000, 1432, 4904]),
+                     "Electron_Bins_High_Energy": np.array([92, 143, 214, 331, 1193, 3165, 10000]),
+                     "Ion_Bins_Low_Energy": np.array([0.001, 1.088, 1.407, 2.139, 3.647, 7.533, 13.211, 22.606, 29.246]),
+                     "Ion_Bins_High_Energy": np.array([1.254, 1.311, 1.608, 2.388, 4.241, 8.534, 15.515, 28.413, 40.0])}
+    return df, channels_dict
+
+
+def calc_av_en_flux_sixs(df, channel, species):
+    """
+    This function averages the flux of two energy channels of BepiColombo/SIXS into a combined energy channel
+    channel numbers counted from 1
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing HET data
+    channel : int or list
+        energy channel or list with first and last channel to be used
+    species : string
+        'e', 'electrons', 'p', 'protons'
+
+    Returns
+    -------
+    flux: pd.DataFrame
+        channel-averaged flux
+    en_channel_string: str
+        string containing the energy information of combined channel
+    """
+
+    # define constant geometric factors
+    GEOMFACTOR_PROT8 = 5.97E-01
+    GEOMFACTOR_PROT9 = 4.09E+00
+    GEOMFACTOR_ELEC5 = 1.99E-02
+    GEOMFACTOR_ELEC6 = 1.33E-01
+    GEOMFACTOR_PROT_COMB89 = 3.34
+    GEOMFACTOR_ELEC_COMB56 = 0.0972
+
+    if species in ['p', 'protons']:
+        if channel == [8, 9]:
+            countrate = df['P8'] * GEOMFACTOR_PROT8 + df['P9'] * GEOMFACTOR_PROT9
+            flux = countrate / GEOMFACTOR_PROT_COMB89
+            en_channel_string = '37 MeV'
+        else:
+            print('No valid channel combination selected.')
+            flux = pd.Series()
+            en_channel_string = ''
+
+    if species in ['e', 'electrons']:
+        if channel == [5, 6]:
+            countrate = df['E5'] * GEOMFACTOR_ELEC5 + df['E6'] * GEOMFACTOR_ELEC6
+            flux = countrate / GEOMFACTOR_ELEC_COMB56
+            en_channel_string = '1.4 MeV'
+        else:
+            print('No valid channel combination selected.')
+            flux = pd.Series()
+            en_channel_string = ''
+
+    return flux, en_channel_string
+
+
 # some plot options
 intensity_label = 'Flux\n/(s cm² sr MeV)'
 linewidth = 1.5
@@ -193,6 +301,15 @@ if plot_times:
     # Load modified spreadhseet
     df = pd.read_csv('WP2_multi-sc_SEP_event_list_D2.3.csv')
 
+    # get list of flare times
+    df_flare_date_str = df['flare date\n(yyyy-mm-dd)'].values.astype(str)
+    df_flare_date_str = np.delete(df_flare_date_str, np.where(df_flare_date_str == 'nan'))
+    df_flare_times_str = df['flare time\n(HH:MM:SS)'].values.astype(str)
+    df_flare_times_str = np.delete(df_flare_times_str, np.where(df_flare_times_str == 'nan'))
+    df_flare_times = []
+    for i in range(len(df_flare_date_str)):
+        df_flare_times.append(dt.datetime.strptime(f'{df_flare_date_str[i]} {df_flare_times_str[i]}', '%Y-%m-%d %H:%M:%S'))
+
     def get_times_from_csv_list(df, observer):
         """
         df_onset_p, df_peak_p, df_onset_e100, df_peak_e100, df_onset_e1000, df_peak_e1000 = get_times_from_csv_list(df, 'SOLO')
@@ -202,14 +319,14 @@ if plot_times:
 
         # protons
         df_solo_onset_date_p_str = df_solo['PROTONS 25-40 MeV Onset date (yyyy-mm-dd)'].values.astype(str)
-        df_solo_onset_date_p_str = np.delete(df_solo_onset_date_p_str , np.where(df_solo_onset_date_p_str == 'nan'))
+        df_solo_onset_date_p_str = np.delete(df_solo_onset_date_p_str, np.where(df_solo_onset_date_p_str == 'nan'))
         df_solo_onset_time_p_str = df_solo['PROTONS 25-40 MeV Onset time (HH:MM:SS)'].values.astype(str)
-        df_solo_onset_time_p_str = np.delete(df_solo_onset_time_p_str , np.where(df_solo_onset_time_p_str == 'nan'))
+        df_solo_onset_time_p_str = np.delete(df_solo_onset_time_p_str, np.where(df_solo_onset_time_p_str == 'nan'))
 
         df_solo_peak_date_p_str = df_solo['PROTONS 25-40 MeV Peak date (yyyy-mm-dd)'].values.astype(str)
-        df_solo_peak_date_p_str = np.delete(df_solo_peak_date_p_str , np.where(df_solo_peak_date_p_str == 'nan'))
+        df_solo_peak_date_p_str = np.delete(df_solo_peak_date_p_str, np.where(df_solo_peak_date_p_str == 'nan'))
         df_solo_peak_time_p_str = df_solo['PROTONS 25-40 MeV Peak time (HH:MM:SS)'].values.astype(str)
-        df_solo_peak_time_p_str = np.delete(df_solo_peak_time_p_str , np.where(df_solo_peak_time_p_str == 'nan'))
+        df_solo_peak_time_p_str = np.delete(df_solo_peak_time_p_str, np.where(df_solo_peak_time_p_str == 'nan'))
 
         df_solo_onset_p = []
         for i in range(len(df_solo_onset_date_p_str)):
@@ -223,14 +340,14 @@ if plot_times:
 
         # 100 keV electrons
         df_solo_onset_date_e100_str = df_solo['ELECTRONS 100 keV Onset date (yyyy-mm-dd)'].values.astype(str)
-        df_solo_onset_date_e100_str = np.delete(df_solo_onset_date_e100_str , np.where(df_solo_onset_date_e100_str == 'nan'))
+        df_solo_onset_date_e100_str = np.delete(df_solo_onset_date_e100_str, np.where(df_solo_onset_date_e100_str == 'nan'))
         df_solo_onset_time_e100_str = df_solo['ELECTRONS 100 keV Onset time (HH:MM:SS)'].values.astype(str)
-        df_solo_onset_time_e100_str = np.delete(df_solo_onset_time_e100_str , np.where(df_solo_onset_time_e100_str == 'nan'))
+        df_solo_onset_time_e100_str = np.delete(df_solo_onset_time_e100_str, np.where(df_solo_onset_time_e100_str == 'nan'))
 
         df_solo_peak_date_e100_str = df_solo['ELECTRONS 100 keV Peak date (yyyy-mm-dd)'].values.astype(str)
-        df_solo_peak_date_e100_str = np.delete(df_solo_peak_date_e100_str , np.where(df_solo_peak_date_e100_str == 'nan'))
+        df_solo_peak_date_e100_str = np.delete(df_solo_peak_date_e100_str, np.where(df_solo_peak_date_e100_str == 'nan'))
         df_solo_peak_time_e100_str = df_solo['ELECTRONS 100 keV Peak time (HH:MM:SS)'].values.astype(str)
-        df_solo_peak_time_e100_str = np.delete(df_solo_peak_time_e100_str , np.where(df_solo_peak_time_e100_str == 'nan'))
+        df_solo_peak_time_e100_str = np.delete(df_solo_peak_time_e100_str, np.where(df_solo_peak_time_e100_str == 'nan'))
 
         df_solo_onset_e100 = []
         for i in range(len(df_solo_onset_date_e100_str)):
@@ -244,14 +361,14 @@ if plot_times:
 
         # 1000 keV (1 MeV) electrons
         df_solo_onset_date_e1000_str = df_solo['ELECTRONS 1 MeV Onset date (yyyy-mm-dd)'].values.astype(str)
-        df_solo_onset_date_e1000_str = np.delete(df_solo_onset_date_e1000_str , np.where(df_solo_onset_date_e1000_str == 'nan'))
+        df_solo_onset_date_e1000_str = np.delete(df_solo_onset_date_e1000_str, np.where(df_solo_onset_date_e1000_str == 'nan'))
         df_solo_onset_time_e1000_str = df_solo['ELECTRONS 1 MeV Onset time (HH:MM:SS)'].values.astype(str)
-        df_solo_onset_time_e1000_str = np.delete(df_solo_onset_time_e1000_str , np.where(df_solo_onset_time_e1000_str == 'nan'))
+        df_solo_onset_time_e1000_str = np.delete(df_solo_onset_time_e1000_str, np.where(df_solo_onset_time_e1000_str == 'nan'))
 
         df_solo_peak_date_e1000_str = df_solo['ELECTRONS 1 MeV Peak date (yyyy-mm-dd)'].values.astype(str)
-        df_solo_peak_date_e1000_str = np.delete(df_solo_peak_date_e1000_str , np.where(df_solo_peak_date_e1000_str == 'nan'))
+        df_solo_peak_date_e1000_str = np.delete(df_solo_peak_date_e1000_str, np.where(df_solo_peak_date_e1000_str == 'nan'))
         df_solo_peak_time_e1000_str = df_solo['ELECTRONS 1 MeV Peak time (HH:MM:SS)'].values.astype(str)
-        df_solo_peak_time_e1000_str = np.delete(df_solo_peak_time_e1000_str , np.where(df_solo_peak_time_e1000_str == 'nan'))
+        df_solo_peak_time_e1000_str = np.delete(df_solo_peak_time_e1000_str, np.where(df_solo_peak_time_e1000_str == 'nan'))
 
         df_solo_onset_e1000 = []
         for i in range(len(df_solo_onset_date_e1000_str)):
@@ -265,6 +382,7 @@ if plot_times:
 
         return df_solo_onset_p, df_solo_peak_p, df_solo_onset_e100, df_solo_peak_e100, df_solo_onset_e1000, df_solo_peak_e1000
 
+    df_bepi_onset_p, df_bepi_peak_p, df_bepi_onset_e100, df_bepi_peak_e100, df_bepi_onset_e1000, df_bepi_peak_e1000 = get_times_from_csv_list(df, 'BepiColombo')
     df_solo_onset_p, df_solo_peak_p, df_solo_onset_e100, df_solo_peak_e100, df_solo_onset_e1000, df_solo_peak_e1000 = get_times_from_csv_list(df, 'SOLO')
     df_sta_onset_p, df_sta_peak_p, df_sta_onset_e100, df_sta_peak_e100, df_sta_onset_e1000, df_sta_peak_e1000 = get_times_from_csv_list(df, 'STEREO-A')
     df_psp_onset_p, df_psp_peak_p, df_psp_onset_e100, df_psp_peak_e100, df_psp_onset_e1000, df_psp_peak_e1000 = get_times_from_csv_list(df, 'PSP')
@@ -272,7 +390,7 @@ if plot_times:
     df_soho_onset_p, df_soho_peak_p, df_soho_onset_e100, df_soho_peak_e100, df_soho_onset_e1000, df_soho_peak_e1000 = get_times_from_csv_list(df, 'SOHO')
 
     # obtain a list of all onset datetime
-    all_onsets = df_solo_onset_p + df_solo_onset_e100 + df_solo_onset_e1000 + df_sta_onset_p + df_sta_onset_e100 + df_sta_onset_e1000 + df_psp_onset_p + df_psp_onset_e100 + df_psp_onset_e1000 + df_wind_onset_p + df_wind_onset_e100 + df_wind_onset_e1000 + df_soho_onset_p + df_soho_onset_e100 + df_soho_onset_e1000
+    all_onsets = df_bepi_onset_p + df_bepi_onset_e100 + df_bepi_onset_e1000 + df_solo_onset_p + df_solo_onset_e100 + df_solo_onset_e1000 + df_sta_onset_p + df_sta_onset_e100 + df_sta_onset_e1000 + df_psp_onset_p + df_psp_onset_e100 + df_psp_onset_e1000 + df_wind_onset_p + df_wind_onset_e100 + df_wind_onset_e1000 + df_soho_onset_p + df_soho_onset_e100 + df_soho_onset_e1000
     all_onsets.sort()
     # obtain a list of all onset dates
     all_onset_dates_org = np.array([i.date() for i in all_onsets])
@@ -285,7 +403,6 @@ if plot_times:
     for i, date in enumerate(all_onset_dates):
         all_onset_dates_first.append(all_onsets[np.where(all_onset_dates_org == date)[0][0]])
 
-
 """
 END LOAD ONSET TIMES
 """
@@ -296,11 +413,13 @@ if mode == 'events':
     dates = all_onset_dates_first
 # for startdate in tqdm(dates.to_pydatetime()):
 for i in tqdm(range(len(dates))):
+# for i in tqdm(range(2, 3)):
+    # i=24
     print(i, dates[i])
     if mode == 'regular':
         startdate = dates[i].to_pydatetime()
     if mode == 'events':
-        startdate = dt.datetime.fromisoformat(dates[i].isoformat()) - pd.Timedelta('2h')
+        startdate = dt.datetime.fromisoformat(dates[i].isoformat()) - pd.Timedelta('5h')
         plot_period = ('48h')
     enddate = startdate + pd.Timedelta(plot_period)
     outfile = f'{outpath}{os.sep}Multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av.png'
@@ -308,27 +427,26 @@ for i in tqdm(range(len(dates))):
     if Bepi:
         # av_bepi = 10
         sixs_resample = averaging  # '10min'
-        # 'E1':'71 keV', 'E2':'106 keV', 'E3':'169 keV', 'E4':'280 keV', 'E5':'960 keV', 'E6':'2240 keV', 'E7':'8170 keV'
-        sixs_ch_e1 = 'E5'  # 'E2' #
-        sixs_ch_e100 = 'E2'
-        sixs_side_e = 2
-        sixs_color = seaborn_colorblind[4]
-        # 'P1':'1.1 MeV', 'P2':'1.2 MeV', 'P3':'1.5 MeV', 'P4':'2.3 MeV', 'P5':'4.0 MeV', 'P6':'8.0 MeV', 'P7':'15.0 MeV','P8':'25.1 MeV', 'P9':'37.3 MeV'
-        sixs_ch_p = ['P8', 'P9']  # we want 'P8'-'P9' averaged (to do!)
-        sixs_side_p = 3
+        sixs_ch_e1 = [5, 6]
+        sixs_ch_e100 = 2
+        sixs_ch_p = [8, 9]  # we want 'P8'-'P9' averaged
+        sixs_side = 2
+        sixs_color = 'orange'  # seaborn_colorblind[4]  # orange?
+        sixs_path = '/home/gieseler/uni/bepi/data/bc_mpo_sixs/data_csv/cruise/sixs-p/raw'
     if SOHO:
         soho_ephin_color = 'k'
         soho_erne_color = 'k'  # seaborn_colorblind[5]  # 'green'
         # av_soho = av
         soho_erne_resample = averaging  # '30min'
+        soho_ephin_resample = averaging  # '30min'
         soho_path = '/home/gieseler/uni/soho/data/'
         if erne:
             erne_p_ch = [3, 4]  # [0]  # [4,5]  # 2
         if ephin_e:
-            ephin_ch_e1 = 'e150'
-            ephin_e_intercal = 1/14.
-        if ephin_p:
-            ephin_ch_p = 'p25'
+            ephin_ch_e1 = 'E1300'
+            # ephin_e_intercal = 1/14.
+        # if ephin_p:
+        #     ephin_ch_p = 'p25'
     if SOLO:
         solo_ept_color = seaborn_colorblind[5]  # 'blue'
         solo_het_color = seaborn_colorblind[0]  # 'blue' # seaborn_colorblind[1]
@@ -425,7 +543,14 @@ for i in tqdm(range(len(dates))):
     if SOHO:
         if ephin_e or ephin_p:
             print('loading soho/ephin')
-            ephin = eph_rl2_loader(startdate.year, startdate.timetuple().tm_yday, doy2=enddate.timetuple().tm_yday, av=av_soho)
+            # ephin = eph_rl2_loader(startdate.year, startdate.timetuple().tm_yday, doy2=enddate.timetuple().tm_yday, av=av_soho)
+            soho_ephin, ephin_energies = soho_load(dataset="SOHO_COSTEP-EPHIN_L2-1MIN",
+                                                   startdate=startdate,
+                                                   enddate=enddate,
+                                                   path=soho_path,
+                                                   resample=soho_ephin_resample,
+                                                   pos_timestamp='center')
+
         if erne:
             print('loading soho/erne')
             erne_chstring = ['13-16 MeV', '16-20 MeV', '20-25 MeV', '25-32 MeV', '32-40 MeV', '40-50 MeV', '50-64 MeV', '64-80 MeV', '80-100 MeV', '100-130 MeV']
@@ -475,9 +600,16 @@ for i in tqdm(range(len(dates))):
 
     if Bepi:
         print('loading Bepi/SIXS')
-        sixs_e, sixs_chstrings = bepi_sixs_loader(startdate.year, startdate.month, startdate.day, sixs_side_e, av=sixs_resample)
-        sixs_p, sixs_chstrings = bepi_sixs_loader(startdate.year, startdate.month, startdate.day, sixs_side_p, av=sixs_resample)
-        sixs_ch_e = sixs_ch_e100
+        # sixs_e, sixs_chstrings = bepi_sixs_loader(startdate.year, startdate.month, startdate.day, sixs_side_e, av=sixs_resample)
+        # sixs_p, sixs_chstrings = bepi_sixs_loader(startdate.year, startdate.month, startdate.day, sixs_side_p, av=sixs_resample)
+        # sixs_ch_e = sixs_ch_e100
+        sixs_df, sixs_meta = bepi_sixs_load(startdate=startdate,
+                                            enddate=enddate,
+                                            side=sixs_side,
+                                            path=sixs_path)
+        if len(sixs_df) > 0:
+            sixs_df_p = sixs_df[[f"P{i}" for i in range(1, 10)]]
+            sixs_df_e = sixs_df[[f"E{i}" for i in range(1, 8)]] 
 
 ########## AVERAGE ENERGY CHANNELS
 ####################################################
@@ -556,6 +688,21 @@ for i in tqdm(range(len(dates))):
                                                                              erne_p_ch,
                                                                              species='p',
                                                                              sensor='HET')
+    if Bepi:
+        if len(sixs_df) > 0:
+            # 1 MeV electrons:
+            sixs_df_e1, sixs_e1_en_channel_string = calc_av_en_flux_sixs(sixs_df_e, sixs_ch_e1, 'e')
+            # >25 MeV protons:
+            sixs_df_p25, sixs_p25_en_channel_string = calc_av_en_flux_sixs(sixs_df_p, sixs_ch_p, 'p')
+            # 100 keV electrons withouth averaging:
+            sixs_df_e100 = sixs_df_e[f'E{sixs_ch_e100}']
+            sixs_e100_en_channel_string = sixs_meta['Energy_Bin_str'][f'E{sixs_ch_e100}']
+
+            if isinstance(sixs_resample, str):
+                    sixs_df_e100 = resample_df(sixs_df_e100, sixs_resample)
+                    sixs_df_e1 = resample_df(sixs_df_e1, sixs_resample)
+                    sixs_df_p25 = resample_df(sixs_df_p25, sixs_resample)
+
     if PSP:
         if len(psp_het) > 0:
             if plot_e_1:
@@ -619,6 +766,15 @@ for i in tqdm(range(len(dates))):
         if ept_use_corr_e:
             species_string = 'Electrons (corrected)'
 
+        # plot flare times with arrows on top
+        if mode == 'events':   
+            trans = blended_transform_factory(x_transform=ax.transData, y_transform=ax.transAxes)
+            ind = np.where((np.array(df_flare_times) < enddate) & (np.array(df_flare_times) > startdate))
+            [ax.annotate('', 
+                         xy=[mdates.date2num(i), 1.0], xycoords=trans,
+                         xytext=[mdates.date2num(i), 1.07], textcoords=trans,
+                         arrowprops=dict(arrowstyle="->", lw=2)) for i in np.array(df_flare_times)[ind]]
+
         if PSP:
             if len(psp_epilo) > 0:
                 ax.plot(df_psp_epilo_e.index, df_psp_epilo_e*100, color=psp_het_color, linewidth=linewidth,
@@ -629,7 +785,12 @@ for i in tqdm(range(len(dates))):
                 [ax.axvline(i, lw=2, ls=':', color=psp_het_color) for i in df_psp_peak_e100]    
 
         if Bepi:
-            ax.plot(sixs_e.index, sixs_e[sixs_ch_e], color='orange', linewidth=linewidth, label='BepiColombo\nSIXS '+sixs_chstrings[sixs_ch_e]+f'\nside {sixs_side_e}', drawstyle='steps-mid')
+            # ax.plot(sixs_e.index, sixs_e[sixs_ch_e], color='orange', linewidth=linewidth, label='BepiColombo\nSIXS '+sixs_chstrings[sixs_ch_e]+f'\nside {sixs_side_e}', drawstyle='steps-mid')
+            if len(sixs_df) > 0:
+                ax.plot(sixs_df_e100.index, sixs_df_e100, color=sixs_color, linewidth=linewidth, label='BepiColombo/SIXS '+sixs_e100_en_channel_string+f' side {sixs_side}', drawstyle='steps-mid')
+            if plot_times:
+                [ax.axvline(i, lw=2, color=sixs_color) for i in df_bepi_onset_e100]
+                [ax.axvline(i, lw=2, ls=':', color=sixs_color) for i in df_bepi_peak_e100]   
         if SOLO:
             if ept and (len(ept_e) > 0):
                 flux_ept = df_ept_e.values
@@ -653,11 +814,11 @@ for i in tqdm(range(len(dates))):
                     [ax.axvline(i, lw=2, color=stereo_sept_color) for i in df_sta_onset_e100]
                     [ax.axvline(i, lw=2, ls=':', color=stereo_sept_color) for i in df_sta_peak_e100]
 
-        if SOHO:
-            if ephin_e:
-                ax.plot(ephin['date'], ephin[ephin_ch_e][0]*ephin_e_intercal, color=soho_ephin_color,
-                        linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_e][1]+f'/{ephin_e_intercal}',
-                        drawstyle='steps-mid')
+        # if SOHO:
+            # if ephin_e:
+            #     ax.plot(ephin['date'], ephin[ephin_ch_e][0]*ephin_e_intercal, color=soho_ephin_color,
+            #             linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_e][1]+f'/{ephin_e_intercal}',
+            #             drawstyle='steps-mid')
         if WIND:
             if len(wind3dp_e_df) > 0:
                 # multiply by 1e6 to get per MeV
@@ -696,8 +857,14 @@ for i in tqdm(range(len(dates))):
                 [ax.axvline(i, lw=2, color=psp_het_color) for i in df_psp_onset_e1000] 
                 [ax.axvline(i, lw=2, ls=':', color=psp_het_color) for i in df_psp_peak_e1000] 
         if Bepi:
-            ax.plot(sixs_e.index, sixs_e[sixs_ch_e100], color='orange', linewidth=linewidth,
-                    label='Bepi/SIXS '+sixs_chstrings[sixs_ch_e100]+f' side {sixs_side_e}', drawstyle='steps-mid')
+            # ax.plot(sixs_e.index, sixs_e[sixs_ch_e100], color='orange', linewidth=linewidth,
+            #         label='Bepi/SIXS '+sixs_chstrings[sixs_ch_e100]+f' side {sixs_side_e}', drawstyle='steps-mid')
+            if len(sixs_df) > 0:
+                ax.plot(sixs_df_e1.index, sixs_df_e1, color=sixs_color, linewidth=linewidth,
+                        label='BepiColombo/SIXS '+sixs_e1_en_channel_string+f' side {sixs_side}', drawstyle='steps-mid')
+            if plot_times:
+                [ax.axvline(i, lw=2, color=sixs_color) for i in df_bepi_onset_e1000] 
+                [ax.axvline(i, lw=2, ls=':', color=sixs_color) for i in df_bepi_peak_e1000] 
         if SOLO:
             if het and (len(het_e) > 0):
                 ax.plot(df_het_e.index.values, df_het_e.flux, linewidth=linewidth, color=solo_het_color, label='SOLO/HET '+het_chstring_e+f' {sector}', drawstyle='steps-mid')
@@ -714,7 +881,9 @@ for i in tqdm(range(len(dates))):
                 [ax.axvline(i, lw=2, ls=':', color=stereo_het_color) for i in df_sta_peak_e1000]
         if SOHO:
             if ephin_e:
-                ax.plot(ephin['date'], ephin[ephin_ch_e][0]*ephin_e_intercal, color=soho_ephin_color, linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_e][1]+f'/{ephin_e_intercal}', drawstyle='steps-mid')
+                # ax.plot(ephin['date'], ephin[ephin_ch_e][0]*ephin_e_intercal, color=soho_ephin_color, linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_e][1]+f'/{ephin_e_intercal}', drawstyle='steps-mid')
+                if len(soho_ephin) > 0:
+                    ax.plot(soho_ephin.index, soho_ephin[ephin_ch_e1], color=soho_ephin_color, linewidth=linewidth, label='SOHO/EPHIN '+ephin_energies[ephin_ch_e1], drawstyle='steps-mid')
             if plot_times:
                 [ax.axvline(i, lw=2, color=soho_ephin_color) for i in df_soho_onset_e1000]
                 [ax.axvline(i, lw=2, ls=':', color=soho_ephin_color) for i in df_soho_peak_e1000]
@@ -745,7 +914,12 @@ for i in tqdm(range(len(dates))):
                 [ax.axvline(i, lw=2, color=psp_het_color) for i in df_psp_onset_p]
                 [ax.axvline(i, lw=2, ls=':', color=psp_het_color) for i in df_psp_peak_p]
         if Bepi:
-            ax.plot(sixs_p.index, sixs_p[sixs_ch_p], color='orange', linewidth=linewidth, label='BepiColombo/SIXS '+sixs_chstrings[sixs_ch_p]+f' side {sixs_side_p}', drawstyle='steps-mid')
+            # ax.plot(sixs_p.index, sixs_p[sixs_ch_p], color='orange', linewidth=linewidth, label='BepiColombo/SIXS '+sixs_chstrings[sixs_ch_p]+f' side {sixs_side_p}', drawstyle='steps-mid')
+            if len(sixs_df) > 0:
+                ax.plot(sixs_df_p25.index, sixs_df_p25, color=sixs_color, linewidth=linewidth, label='BepiColombo/SIXS '+sixs_p25_en_channel_string+f' side {sixs_side}', drawstyle='steps-mid')
+            if plot_times:
+                [ax.axvline(i, lw=2, color=sixs_color) for i in df_bepi_onset_p]
+                [ax.axvline(i, lw=2, ls=':', color=sixs_color) for i in df_bepi_peak_p]
         if SOLO:
             if het and (len(ept_e) > 0):
                 ax.plot(df_het_p.index, df_het_p, linewidth=linewidth, color=solo_het_color, label='SOLO/HET '+het_chstring_p+f' {sector}', drawstyle='steps-mid')
