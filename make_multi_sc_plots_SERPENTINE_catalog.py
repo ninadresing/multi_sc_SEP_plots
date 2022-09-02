@@ -402,10 +402,100 @@ if plot_times:
     all_onset_dates_first = []
     for i, date in enumerate(all_onset_dates):
         all_onset_dates_first.append(all_onsets[np.where(all_onset_dates_org == date)[0][0]])
-
 """
 END LOAD ONSET TIMES
 """
+
+"""
+START PLOT PEAK FLUXES VS DATES
+"""
+plot_peak_vs_time = False
+if plot_peak_vs_time:
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for obs in ['SOLO', 'STEREO-A', 'Wind', 'BepiColombo', 'PSP']:  # 'PSP' removed bc. scaled count rates only
+        df_obs = df[df.Observer == obs]
+        nindex = np.where(df_obs['ELECTRONS 100 keV Peak date (yyyy-mm-dd)'].values.astype(str) != 'nan')[0]
+        dates = [dt.datetime.strptime(df_obs['ELECTRONS 100 keV Peak date (yyyy-mm-dd)'].iloc[nindex].values[i], '%Y-%m-%d') for i in range(len(nindex))]
+        fluxes = [float(df_obs['ELECTRONS 100 keV Peak flux'].iloc[nindex].values[i].replace(',', '.')) for i in range(len(nindex))]
+        ax.plot(dates, fluxes, 'o', label=f'{obs}')
+    ax.set_title('100 keV electrons')
+    ax.set_ylabel('peak flux')
+    ax.legend()
+    plt.show()
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for obs in ['SOLO', 'STEREO-A', 'SOHO', 'BepiColombo']:  # 'PSP' removed bc. scaled count rates only
+        df_obs = df[df.Observer == obs]
+        nindex = np.where(df_obs['ELECTRONS 1 MeV Peak date (yyyy-mm-dd)'].values.astype(str) != 'nan')[0]
+        dates = [dt.datetime.strptime(df_obs['ELECTRONS 1 MeV Peak date (yyyy-mm-dd)'].iloc[nindex].values[i], '%Y-%m-%d') for i in range(len(nindex))]
+        fluxes = [float(df_obs['ELECTRONS 1 MeV Peak flux'].iloc[nindex].values[i].replace(',', '.')) for i in range(len(nindex))]
+        ax.plot(dates, fluxes, 'o', label=f'{obs}')
+    ax.set_title('1 MeV electrons')
+    ax.set_ylabel('peak flux')
+    ax.legend()
+    plt.show()
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for obs in ['SOLO', 'STEREO-A', 'SOHO', 'BepiColombo', 'PSP']:
+        df_obs = df[df.Observer == obs]
+        nindex = np.where(df_obs['PROTONS 25-40 MeV Peak date (yyyy-mm-dd)'].values.astype(str) != 'nan')[0]
+        dates = [dt.datetime.strptime(df_obs['PROTONS 25-40 MeV Peak date (yyyy-mm-dd)'].iloc[nindex].values[i], '%Y-%m-%d') for i in range(len(nindex))]
+        fluxes = [float(df_obs['PROTONS 25-40 MeV Peak flux'].iloc[nindex].values[i].replace(',', '.')) for i in range(len(nindex))]
+        ax.plot(dates, fluxes, 'o', label=f'{obs}')
+    ax.set_title('> 25 MeV protons')
+    ax.set_ylabel('peak flux')
+    ax.legend()
+    plt.show()
+
+plot_peak_vs_time2 = False
+if plot_peak_vs_time2:
+    event_number = list(dict.fromkeys(df['Event number'].values))
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for event in event_number:
+        df_event = df[df['Event number'] == event]
+        nindex = np.where(df_event['ELECTRONS 100 keV Peak date (yyyy-mm-dd)'].values.astype(str) != 'nan')[0]
+        dates = [dt.datetime.strptime(df_event['ELECTRONS 100 keV Peak date (yyyy-mm-dd)'].iloc[nindex].values[i], '%Y-%m-%d') for i in range(len(nindex))]
+        fluxes = [float(df_event['ELECTRONS 100 keV Peak flux'].iloc[nindex].values[i].replace(',', '.')) for i in range(len(nindex))]
+        if len(fluxes) > 0:
+            ax.bar(dates[np.argmax(fluxes)], fluxes[np.argmax(fluxes)], width=3, color='k', label=f'{event}')
+    ax.set_title('100 keV electrons')
+    ax.set_xlim(dt.datetime(2020, 11, 1), dt.datetime(2022, 6, 1))
+    ax.set_yscale('log')
+    ax.set_ylabel('Peak Flux / (s cm² sr MeV)')
+    plt.show()
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for event in event_number:
+        df_event = df[df['Event number'] == event]
+        nindex = np.where(df_event['ELECTRONS 1 MeV Peak date (yyyy-mm-dd)'].values.astype(str) != 'nan')[0]
+        dates = [dt.datetime.strptime(df_event['ELECTRONS 1 MeV Peak date (yyyy-mm-dd)'].iloc[nindex].values[i], '%Y-%m-%d') for i in range(len(nindex))]
+        fluxes = [float(df_event['ELECTRONS 1 MeV Peak flux'].iloc[nindex].values[i].replace(',', '.')) for i in range(len(nindex))]
+        if len(fluxes) > 0:
+            ax.bar(dates[np.argmax(fluxes)], fluxes[np.argmax(fluxes)], width=3, color='k', label=f'{event}')
+    ax.set_title('1 MeV electrons')
+    ax.set_xlim(dt.datetime(2020, 11, 1), dt.datetime(2022, 6, 1))
+    ax.set_yscale('log')
+    ax.set_ylabel('Peak Flux / (s cm² sr MeV)')
+    plt.show()
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for event in event_number:
+        df_event = df[df['Event number'] == event]
+        nindex = np.where(df_event['PROTONS 25-40 MeV Peak date (yyyy-mm-dd)'].values.astype(str) != 'nan')[0]
+        dates = [dt.datetime.strptime(df_event['PROTONS 25-40 MeV Peak date (yyyy-mm-dd)'].iloc[nindex].values[i], '%Y-%m-%d') for i in range(len(nindex))]
+        fluxes = [float(df_event['PROTONS 25-40 MeV Peak flux'].iloc[nindex].values[i].replace(',', '.')) for i in range(len(nindex))]
+        if len(fluxes) > 0:
+            ax.bar(dates[np.argmax(fluxes)], fluxes[np.argmax(fluxes)], width=3, color='k', label=f'{event}')
+    ax.set_title('>25 MeV protons')
+    ax.set_xlim(dt.datetime(2020, 11, 1), dt.datetime(2022, 6, 1))
+    ax.set_yscale('log')
+    ax.set_ylabel('Peak Flux / (s cm² sr MeV)')
+    plt.show()
+"""
+END PLOT PEAK FLUXES VS DATES
+"""
+
 
 if mode == 'regular':
     dates = pd.date_range(start=first_date, end=last_date, freq=plot_period)
