@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import sunpy
+from inf_inj_time import inf_inj_time
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.transforms import blended_transform_factory
 from psp_isois_loader import calc_av_en_flux_PSP_EPIHI, calc_av_en_flux_PSP_EPILO, psp_isois_load, resample_df
@@ -40,13 +41,13 @@ moved this file to Deepnote June 15 2022
 mode = 'events'
 
 if mode == 'regular':
-    first_date = dt.datetime(2021, 4, 15)
-    last_date = dt.datetime(2021, 4, 15)
+    first_date = dt.datetime(2022, 1, 1)
+    last_date = dt.datetime(2022, 6, 1)
     plot_period = '7D'
     averaging = '1h'  # '5min'  # None
 
 if mode == 'events':
-    averaging = '5min'  # None
+    averaging = '20min'  # '5min' None
 
 Bepi = True
 PSP = True
@@ -299,7 +300,9 @@ if plot_times:
     # First you have to manually (!) bring spreadsheet in the same form as the example file!!!
 
     # Load modified spreadhseet
-    df = pd.read_csv('WP2_multi-sc_SEP_event_list_D2.3.csv')
+    # df = pd.read_csv('WP2_multi-sc_SEP_event_list_D2.3.csv')
+    df = pd.read_csv('WP2_multi_sc_catalog - WP2_multi_sc_event_list_draft.csv')
+    # df = pd.read_excel('WP2_multi-sc_SEP_event_list_D2.3.xlsx')
 
     # get list of flare times
     df_flare_date_str = df['flare date\n(yyyy-mm-dd)'].values.astype(str)
@@ -318,14 +321,14 @@ if plot_times:
         df_solo = df[df.Observer == observer]
 
         # protons
-        df_solo_onset_date_p_str = df_solo['PROTONS 25-40 MeV Onset date (yyyy-mm-dd)'].values.astype(str)
+        df_solo_onset_date_p_str = df_solo['p25MeV onset date (yyyy-mm-dd)'].values.astype(str)
         df_solo_onset_date_p_str = np.delete(df_solo_onset_date_p_str, np.where(df_solo_onset_date_p_str == 'nan'))
-        df_solo_onset_time_p_str = df_solo['PROTONS 25-40 MeV Onset time (HH:MM:SS)'].values.astype(str)
+        df_solo_onset_time_p_str = df_solo['p25MeV onset time (HH:MM:SS)'].values.astype(str)
         df_solo_onset_time_p_str = np.delete(df_solo_onset_time_p_str, np.where(df_solo_onset_time_p_str == 'nan'))
 
-        df_solo_peak_date_p_str = df_solo['PROTONS 25-40 MeV Peak date (yyyy-mm-dd)'].values.astype(str)
+        df_solo_peak_date_p_str = df_solo['p25MeV peak date (yyyy-mm-dd)'].values.astype(str)
         df_solo_peak_date_p_str = np.delete(df_solo_peak_date_p_str, np.where(df_solo_peak_date_p_str == 'nan'))
-        df_solo_peak_time_p_str = df_solo['PROTONS 25-40 MeV Peak time (HH:MM:SS)'].values.astype(str)
+        df_solo_peak_time_p_str = df_solo['p25MeV peak time (HH:MM:SS)'].values.astype(str)
         df_solo_peak_time_p_str = np.delete(df_solo_peak_time_p_str, np.where(df_solo_peak_time_p_str == 'nan'))
 
         df_solo_onset_p = []
@@ -339,14 +342,14 @@ if plot_times:
             # print(f'{df_solo_peak_date_p_str[i]} {df_solo_peak_time_p_str[i]} => {df_solo_peak_p[i]}')
 
         # 100 keV electrons
-        df_solo_onset_date_e100_str = df_solo['ELECTRONS 100 keV Onset date (yyyy-mm-dd)'].values.astype(str)
+        df_solo_onset_date_e100_str = df_solo['e100keV onset date (yyyy-mm-dd)'].values.astype(str)
         df_solo_onset_date_e100_str = np.delete(df_solo_onset_date_e100_str, np.where(df_solo_onset_date_e100_str == 'nan'))
-        df_solo_onset_time_e100_str = df_solo['ELECTRONS 100 keV Onset time (HH:MM:SS)'].values.astype(str)
+        df_solo_onset_time_e100_str = df_solo['e100keV onset time (HH:MM:SS)'].values.astype(str)
         df_solo_onset_time_e100_str = np.delete(df_solo_onset_time_e100_str, np.where(df_solo_onset_time_e100_str == 'nan'))
 
-        df_solo_peak_date_e100_str = df_solo['ELECTRONS 100 keV Peak date (yyyy-mm-dd)'].values.astype(str)
+        df_solo_peak_date_e100_str = df_solo['e100keV peak date (yyyy-mm-dd)'].values.astype(str)
         df_solo_peak_date_e100_str = np.delete(df_solo_peak_date_e100_str, np.where(df_solo_peak_date_e100_str == 'nan'))
-        df_solo_peak_time_e100_str = df_solo['ELECTRONS 100 keV Peak time (HH:MM:SS)'].values.astype(str)
+        df_solo_peak_time_e100_str = df_solo['e100keV peak time (HH:MM:SS)'].values.astype(str)
         df_solo_peak_time_e100_str = np.delete(df_solo_peak_time_e100_str, np.where(df_solo_peak_time_e100_str == 'nan'))
 
         df_solo_onset_e100 = []
@@ -360,14 +363,14 @@ if plot_times:
             # print(f'{df_solo_peak_date_e100_str[i]} {df_solo_peak_time_e100_str[i]} => {df_solo_peak_e100[i]}')
 
         # 1000 keV (1 MeV) electrons
-        df_solo_onset_date_e1000_str = df_solo['ELECTRONS 1 MeV Onset date (yyyy-mm-dd)'].values.astype(str)
+        df_solo_onset_date_e1000_str = df_solo['e1MeV onset date (yyyy-mm-dd)'].values.astype(str)
         df_solo_onset_date_e1000_str = np.delete(df_solo_onset_date_e1000_str, np.where(df_solo_onset_date_e1000_str == 'nan'))
-        df_solo_onset_time_e1000_str = df_solo['ELECTRONS 1 MeV Onset time (HH:MM:SS)'].values.astype(str)
+        df_solo_onset_time_e1000_str = df_solo['e1MeV onset time (HH:MM:SS)'].values.astype(str)
         df_solo_onset_time_e1000_str = np.delete(df_solo_onset_time_e1000_str, np.where(df_solo_onset_time_e1000_str == 'nan'))
 
-        df_solo_peak_date_e1000_str = df_solo['ELECTRONS 1 MeV Peak date (yyyy-mm-dd)'].values.astype(str)
+        df_solo_peak_date_e1000_str = df_solo['e1MeV peak date (yyyy-mm-dd)'].values.astype(str)
         df_solo_peak_date_e1000_str = np.delete(df_solo_peak_date_e1000_str, np.where(df_solo_peak_date_e1000_str == 'nan'))
-        df_solo_peak_time_e1000_str = df_solo['ELECTRONS 1 MeV Peak time (HH:MM:SS)'].values.astype(str)
+        df_solo_peak_time_e1000_str = df_solo['e1MeV peak time (HH:MM:SS)'].values.astype(str)
         df_solo_peak_time_e1000_str = np.delete(df_solo_peak_time_e1000_str, np.where(df_solo_peak_time_e1000_str == 'nan'))
 
         df_solo_onset_e1000 = []
@@ -386,8 +389,8 @@ if plot_times:
     df_solo_onset_p, df_solo_peak_p, df_solo_onset_e100, df_solo_peak_e100, df_solo_onset_e1000, df_solo_peak_e1000 = get_times_from_csv_list(df, 'SOLO')
     df_sta_onset_p, df_sta_peak_p, df_sta_onset_e100, df_sta_peak_e100, df_sta_onset_e1000, df_sta_peak_e1000 = get_times_from_csv_list(df, 'STEREO-A')
     df_psp_onset_p, df_psp_peak_p, df_psp_onset_e100, df_psp_peak_e100, df_psp_onset_e1000, df_psp_peak_e1000 = get_times_from_csv_list(df, 'PSP')
-    df_wind_onset_p, df_wind_peak_p, df_wind_onset_e100, df_wind_peak_e100, df_wind_onset_e1000, df_wind_peak_e1000 = get_times_from_csv_list(df, 'Wind')
-    df_soho_onset_p, df_soho_peak_p, df_soho_onset_e100, df_soho_peak_e100, df_soho_onset_e1000, df_soho_peak_e1000 = get_times_from_csv_list(df, 'SOHO')
+    df_wind_onset_p, df_wind_peak_p, df_wind_onset_e100, df_wind_peak_e100, df_wind_onset_e1000, df_wind_peak_e1000 = get_times_from_csv_list(df, 'L1 (SOHO/Wind)')  # previously 'Wind'
+    df_soho_onset_p, df_soho_peak_p, df_soho_onset_e100, df_soho_peak_e100, df_soho_onset_e1000, df_soho_peak_e1000 = get_times_from_csv_list(df, 'L1 (SOHO/Wind)')  # previously 'SOHO'
 
     # obtain a list of all onset datetime
     all_onsets = df_bepi_onset_p + df_bepi_onset_e100 + df_bepi_onset_e1000 + df_solo_onset_p + df_solo_onset_e100 + df_solo_onset_e1000 + df_sta_onset_p + df_sta_onset_e100 + df_sta_onset_e1000 + df_psp_onset_p + df_psp_onset_e100 + df_psp_onset_e1000 + df_wind_onset_p + df_wind_onset_e100 + df_wind_onset_e1000 + df_soho_onset_p + df_soho_onset_e100 + df_soho_onset_e1000
@@ -405,6 +408,47 @@ if plot_times:
 """
 END LOAD ONSET TIMES
 """
+
+
+"""
+START CALC INF_INJ_TIMES
+"""
+calc_inf_inj_time = False
+if calc_inf_inj_time:
+    #
+    def get_inf_inj_time(mission, onset_list, particle, energy, solarwind_speed=400):
+        inf_inj_times = []
+        distances = []
+        for i in tqdm(onset_list):
+            inj_time, distance = inf_inj_time(mission, i, particle, energy, solarwind_speed)
+            inf_inj_times.append(inj_time)
+            distances.append(distance)
+            # print(i, inj_time, distance)
+        return inf_inj_times, distances
+    #
+    sta_inf_inj_times_p, sta_distances_p = get_inf_inj_time('STEREO-A', df_sta_onset_p, 'p', np.sqrt(26.3*40.5))
+    # sta_inf_inj_times_e1000, sta_distances_e1000 = get_inf_inj_time('STEREO-A', df_sta_onset_e1000, 'e', np.sqrt(0.7 -2.8))
+    sta_inf_inj_times_e100, sta_distances_e100 = get_inf_inj_time('STEREO-A', df_sta_onset_e100, 'e', np.sqrt(85.*125.))
+    #
+    soho_inf_inj_times_p, soho_distances_p = get_inf_inj_time('SOHO', df_soho_onset_p, 'p', np.sqrt(25*40))
+    soho_inf_inj_times_e1000, soho_distances_e1000 = get_inf_inj_time('SOHO', df_soho_onset_e1000, 'e', np.sqrt(0.67*10.4))
+    wind_inf_inj_times_e1000, wind_distances_e1000 = get_inf_inj_time('Wind', df_wind_onset_e1000, 'e', np.sqrt(75.63*140.46))
+    #
+    solo_inf_inj_times_p, solo_distances_p = get_inf_inj_time('Solar Orbiter', df_solo_onset_p, 'p', np.sqrt(25.09*41.18))
+    solo_inf_inj_times_e1000, solo_distances_e1000 = get_inf_inj_time('Solar Orbiter', df_solo_onset_e1000, 'e', np.sqrt(0.4533*2.4010))
+    solo_inf_inj_times_e100, solo_distances_e100 = get_inf_inj_time('Solar Orbiter', df_solo_onset_e100, 'e', np.sqrt(85.6*130.5))
+    #
+    psp_inf_inj_times_p, psp_distances_p = get_inf_inj_time('Parker Solar Probe', df_psp_onset_p, 'p', np.sqrt(26.91*38.05))
+    psp_inf_inj_times_e1000, psp_distances_e1000 = get_inf_inj_time('Parker Solar Probe', df_psp_onset_e1000, 'e', np.sqrt(0.7071*2.8284))
+    psp_inf_inj_times_e100, psp_distances_e100 = get_inf_inj_time('Parker Solar Probe', df_psp_onset_e100, 'e', np.sqrt(65.91*153.50))
+    #
+    bepi_inf_inj_times_p, bepi_distances_p = get_inf_inj_time('BepiColombo', df_bepi_onset_p, 'p', 37.0)
+    bepi_inf_inj_times_e1000, bepi_distances_e1000 = get_inf_inj_time('BepiColombo', df_bepi_onset_e1000, 'e', 1.4)
+    bepi_inf_inj_times_e100, bepi_distances_e100 = get_inf_inj_time('BepiColombo', df_bepi_onset_e100, 'e', 0.106)
+"""
+END CALC INF_INJ_TIMES
+"""
+
 
 """
 START PLOT PEAK FLUXES VS DATES
@@ -502,8 +546,9 @@ if mode == 'regular':
 if mode == 'events':
     dates = all_onset_dates_first
 # for startdate in tqdm(dates.to_pydatetime()):
-for i in tqdm(range(len(dates))):
-# for i in tqdm(range(2, 3)):
+# for i in tqdm(range(len(dates))):
+# for i in tqdm(range(3, len(dates))):
+for i in tqdm([3, 27]):
     # i=24
     print(i, dates[i])
     if mode == 'regular':
