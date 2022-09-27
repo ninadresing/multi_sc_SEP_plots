@@ -11,11 +11,11 @@ import sunpy
 from inf_inj_time import inf_inj_time
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.transforms import blended_transform_factory
-from psp_isois_loader import calc_av_en_flux_PSP_EPIHI, calc_av_en_flux_PSP_EPILO, psp_isois_load, resample_df
-from soho_loader import calc_av_en_flux_ERNE, soho_load
+from seppy.loader.psp import calc_av_en_flux_PSP_EPIHI, calc_av_en_flux_PSP_EPILO, psp_isois_load, resample_df
+from seppy.loader.soho import calc_av_en_flux_ERNE, soho_load
 from solo_epd_loader import epd_load
-from stereo_loader import calc_av_en_flux_HET as calc_av_en_flux_ST_HET
-from stereo_loader import calc_av_en_flux_SEPT, stereo_load
+from seppy.loader.stereo import calc_av_en_flux_HET as calc_av_en_flux_ST_HET
+from seppy.loader.stereo import calc_av_en_flux_SEPT, stereo_load
 # import astropy.units as u
 # from cdflib.epochs import CDFepoch
 # from sunpy import log
@@ -24,7 +24,7 @@ from stereo_loader import calc_av_en_flux_SEPT, stereo_load
 # from sunpy.timeseries import TimeSeries
 # from sunpy.util.exceptions import warn_user
 from tqdm import tqdm
-from wind_3dp_loader import wind3dp_load
+from seppy.loader.wind import wind3dp_load
 
 '''
 June 2022
@@ -415,36 +415,151 @@ START CALC INF_INJ_TIMES
 """
 calc_inf_inj_time = False
 if calc_inf_inj_time:
-    #
-    def get_inf_inj_time(mission, onset_list, particle, energy, solarwind_speed=400):
-        inf_inj_times = []
-        distances = []
-        for i in tqdm(onset_list):
-            inj_time, distance = inf_inj_time(mission, i, particle, energy, solarwind_speed)
-            inf_inj_times.append(inj_time)
-            distances.append(distance)
-            # print(i, inj_time, distance)
-        return inf_inj_times, distances
-    #
-    sta_inf_inj_times_p, sta_distances_p = get_inf_inj_time('STEREO-A', df_sta_onset_p, 'p', np.sqrt(26.3*40.5))
-    # sta_inf_inj_times_e1000, sta_distances_e1000 = get_inf_inj_time('STEREO-A', df_sta_onset_e1000, 'e', np.sqrt(0.7 -2.8))
-    sta_inf_inj_times_e100, sta_distances_e100 = get_inf_inj_time('STEREO-A', df_sta_onset_e100, 'e', np.sqrt(85.*125.))
-    #
-    soho_inf_inj_times_p, soho_distances_p = get_inf_inj_time('SOHO', df_soho_onset_p, 'p', np.sqrt(25*40))
-    soho_inf_inj_times_e1000, soho_distances_e1000 = get_inf_inj_time('SOHO', df_soho_onset_e1000, 'e', np.sqrt(0.67*10.4))
-    wind_inf_inj_times_e1000, wind_distances_e1000 = get_inf_inj_time('Wind', df_wind_onset_e1000, 'e', np.sqrt(75.63*140.46))
-    #
-    solo_inf_inj_times_p, solo_distances_p = get_inf_inj_time('Solar Orbiter', df_solo_onset_p, 'p', np.sqrt(25.09*41.18))
-    solo_inf_inj_times_e1000, solo_distances_e1000 = get_inf_inj_time('Solar Orbiter', df_solo_onset_e1000, 'e', np.sqrt(0.4533*2.4010))
-    solo_inf_inj_times_e100, solo_distances_e100 = get_inf_inj_time('Solar Orbiter', df_solo_onset_e100, 'e', np.sqrt(85.6*130.5))
-    #
-    psp_inf_inj_times_p, psp_distances_p = get_inf_inj_time('Parker Solar Probe', df_psp_onset_p, 'p', np.sqrt(26.91*38.05))
-    psp_inf_inj_times_e1000, psp_distances_e1000 = get_inf_inj_time('Parker Solar Probe', df_psp_onset_e1000, 'e', np.sqrt(0.7071*2.8284))
-    psp_inf_inj_times_e100, psp_distances_e100 = get_inf_inj_time('Parker Solar Probe', df_psp_onset_e100, 'e', np.sqrt(65.91*153.50))
-    #
-    bepi_inf_inj_times_p, bepi_distances_p = get_inf_inj_time('BepiColombo', df_bepi_onset_p, 'p', 37.0)
-    bepi_inf_inj_times_e1000, bepi_distances_e1000 = get_inf_inj_time('BepiColombo', df_bepi_onset_e1000, 'e', 1.4)
-    bepi_inf_inj_times_e100, bepi_distances_e100 = get_inf_inj_time('BepiColombo', df_bepi_onset_e100, 'e', 0.106)
+    df = pd.read_csv('WP2_multi_sc_catalog - WP2_multi_sc_event_list_draft.csv')
+
+    fixed_mean_energies_p = {
+                            'SOLO': np.sqrt(25.09*41.18),
+                            'PSP': np.sqrt(26.91*38.05),
+                            'STEREO-A': np.sqrt(26.3*40.5),
+                            'L1 (SOHO/Wind)': np.sqrt(25*40),
+                            'BepiColombo': 37.0
+                            }
+    fixed_mean_energies_e1000 = {
+                                'SOLO': np.sqrt(0.4533*2.4010),
+                                'PSP': np.sqrt(0.7071*2.8284),
+                                'STEREO-A': np.sqrt(0.7*2.8),
+                                'L1 (SOHO/Wind)': np.sqrt(0.67*10.4),
+                                'BepiColombo': 1.4
+                                }
+    fixed_mean_energies_e100 = {
+                                'SOLO': np.sqrt(85.6*130.5)/1000.,
+                                'PSP': np.sqrt(65.91*153.50)/1000.,
+                                'STEREO-A': np.sqrt(85.*125.)/1000.,
+                                'L1 (SOHO/Wind)': np.sqrt(75.63*140.46)/1000.,
+                                'BepiColombo': 0.106
+                            }
+    sw = 400
+
+    # inj_times_p = []
+    # distances_p = []
+    # inj_times_e100 = []
+    # distances_e100 = []
+    # inj_times_e1000 = []
+    # distances_e1000 = []
+
+    for i in tqdm(range(df.shape[0])):
+        mission = df['Observer'].iloc[i]
+        if mission == 'L1 (SOHO/Wind)':
+            mission_p = 'SOHO'
+            mission_e1000 = 'SOHO'
+            mission_e100 = 'Wind'
+        else:
+            mission_p = mission
+            mission_e1000 = mission
+            mission_e100 = mission
+
+        onset_date_p_str = df['p25MeV onset date (yyyy-mm-dd)'].iloc[i]
+        onset_time_p_str = df['p25MeV onset time (HH:MM:SS)'].iloc[i]
+        if type(onset_date_p_str) != str or type(onset_time_p_str) != str:
+            onset_p = pd.NaT
+        else:
+            onset_p = dt.datetime.strptime(f'{onset_date_p_str} {onset_time_p_str}', '%Y-%m-%d %H:%M:%S')
+
+        onset_date_e1000_str = df['e1MeV onset date (yyyy-mm-dd)'].iloc[i]
+        onset_time_e1000_str = df['e1MeV onset time (HH:MM:SS)'].iloc[i]
+        if type(onset_date_e1000_str) != str or type(onset_time_e1000_str) != str:
+            onset_e1000 = pd.NaT
+        else:
+            onset_e1000 = dt.datetime.strptime(f'{onset_date_e1000_str} {onset_time_e1000_str}', '%Y-%m-%d %H:%M:%S')
+
+        onset_date_e100_str = df['e100keV onset date (yyyy-mm-dd)'].iloc[i]
+        onset_time_e100_str = df['e100keV onset time (HH:MM:SS)'].iloc[i]
+        if type(onset_date_e100_str) != str or type(onset_time_e100_str) != str:
+            onset_e100 = pd.NaT
+        else:
+            onset_e100 = dt.datetime.strptime(f'{onset_date_e100_str} {onset_time_e100_str}', '%Y-%m-%d %H:%M:%S')
+
+        if not type(onset_p) == pd._libs.tslibs.nattype.NaTType:
+            inj_time_p, distance_p = inf_inj_time(mission_p, onset_p, 'p', fixed_mean_energies_p[mission], sw)
+        else:
+            inj_time_p = pd.NaT
+            distance_p = np.nan
+        if not type(onset_e100) == pd._libs.tslibs.nattype.NaTType:
+            inj_time_e100, distance_e100 = inf_inj_time(mission_e100, onset_e100, 'e', fixed_mean_energies_e100[mission], sw)
+            # use different energy channels for PSP before 14 June 2021:
+            if mission == 'PSP' and onset_e100 < dt.datetime(2021, 6, 14):
+                inj_time_e100, distance_e100 = inf_inj_time(mission_e100, onset_e100, 'e', np.sqrt(84.1*131.6)/1000., sw)
+        else:
+            inj_time_e100 = pd.NaT
+            distance_e100 = np.nan
+        if not type(onset_e1000) == pd._libs.tslibs.nattype.NaTType:
+            inj_time_e1000, distance_e1000 = inf_inj_time(mission_e1000, onset_e1000, 'e', fixed_mean_energies_e1000[mission], sw)
+        else:
+            inj_time_e1000 = pd.NaT
+            distance_e1000 = np.nan
+
+        if not type(inj_time_p) == pd._libs.tslibs.nattype.NaTType:
+            df['p25MeV inferred injection time (HH:MM:SS)'].iloc[i] = inj_time_p.strftime('%H:%M:%S')
+            df['p25MeV inferred injection date (yyyy-mm-dd)'].iloc[i] = inj_time_p.strftime('%Y-%m-%d')
+            df['p25MeV pathlength used for inferred injection time (au)'].iloc[i] = distance_p.value
+        if not type(inj_time_e1000) == pd._libs.tslibs.nattype.NaTType:
+            df['e1MeV inferred injection time (HH:MM:SS)'].iloc[i] = inj_time_e1000.strftime('%H:%M:%S')
+            df['e1MeV inferred injection date (yyyy-mm-dd)'].iloc[i] = inj_time_e1000.strftime('%Y-%m-%d')
+            df['e1MeV pathlength used for inferred injection time (au)'].iloc[i] = distance_e1000.value
+        if not type(inj_time_e100) == pd._libs.tslibs.nattype.NaTType:
+            df['e100keV inferred injection time (HH:MM:SS)'].iloc[i] = inj_time_e100.strftime('%H:%M:%S')
+            df['e100keV inferred injection date (yyyy-mm-dd)'].iloc[i] = inj_time_e100.strftime('%Y-%m-%d')
+            df['e100keV pathlength used for inferred injection time (au)'].iloc[i] = distance_e100.value
+
+        # inj_times_p.append(inj_time_p)
+        # distances_p.append(distance_p)
+        # inj_times_e100.append(inj_time_e100)
+        # distances_e100.append(distance_e100)
+        # inj_times_e1000.append(inj_time_e1000)
+        # distances_e1000.append(distance_e1000)
+
+        # print('p    :', onset_date_p_str, onset_time_p_str, onset_p, distance_p, inj_time_p)
+        # print('e1000:', onset_date_e1000_str, onset_time_e1000_str, onset_e1000, distance_e1000, inj_time_e1000)
+        # print('e100 :', onset_date_e100_str, onset_time_e100_str, onset_e100, distance_e100, inj_time_e100)
+
+        df.to_csv('new.csv', index=False)
+
+# calc_inf_inj_time = False
+# if calc_inf_inj_time:
+#     #
+#     def get_inf_inj_time(mission, onset_list, particle, energy, solarwind_speed=400):
+#         inf_inj_times = []
+#         distances = []
+#         for i in tqdm(onset_list):
+#             inj_time, distance = inf_inj_time(mission, i, particle, energy, solarwind_speed)
+#             inf_inj_times.append(inj_time)
+#             distances.append(distance)
+#             # print(i, inj_time, distance)
+#         return inf_inj_times, distances
+#     #
+#     sta_inf_inj_times_p, sta_distances_p = get_inf_inj_time('STEREO-A', df_sta_onset_p, 'p', np.sqrt(26.3*40.5))
+#     sta_inf_inj_times_e1000, sta_distances_e1000 = get_inf_inj_time('STEREO-A', df_sta_onset_e1000, 'e', np.sqrt(26.3*40.5))
+#     sta_inf_inj_times_e100, sta_distances_e100 = get_inf_inj_time('STEREO-A', df_sta_onset_e100, 'e', np.sqrt(85.*125.)/1000.)
+#     #
+#     soho_inf_inj_times_p, soho_distances_p = get_inf_inj_time('SOHO', df_soho_onset_p, 'p', np.sqrt(25*40))
+#     soho_inf_inj_times_e1000, soho_distances_e1000 = get_inf_inj_time('SOHO', df_soho_onset_e1000, 'e', np.sqrt(0.67*10.4))
+#     wind_inf_inj_times_e100, wind_distances_e100 = get_inf_inj_time('Wind', df_wind_onset_e100, 'e', np.sqrt(75.63*140.46)/1000.)
+#     #
+#     solo_inf_inj_times_p, solo_distances_p = get_inf_inj_time('Solar Orbiter', df_solo_onset_p, 'p', np.sqrt(25.09*41.18))
+#     solo_inf_inj_times_e1000, solo_distances_e1000 = get_inf_inj_time('Solar Orbiter', df_solo_onset_e1000, 'e', np.sqrt(0.4533*2.4010))
+#     solo_inf_inj_times_e100, solo_distances_e100 = get_inf_inj_time('Solar Orbiter', df_solo_onset_e100, 'e', np.sqrt(85.6*130.5)/1000.)
+#     #
+#     psp_inf_inj_times_p, psp_distances_p = get_inf_inj_time('Parker Solar Probe', df_psp_onset_p, 'p', np.sqrt(26.91*38.05))
+#     psp_inf_inj_times_e1000, psp_distances_e1000 = get_inf_inj_time('Parker Solar Probe', df_psp_onset_e1000, 'e', np.sqrt(0.7071*2.8284))
+#     psp_inf_inj_times_e100, psp_distances_e100 = get_inf_inj_time('Parker Solar Probe', df_psp_onset_e100, 'e', np.sqrt(65.91*153.50)/1000.)
+#     #
+#     bepi_inf_inj_times_p, bepi_distances_p = get_inf_inj_time('BepiColombo', df_bepi_onset_p, 'p', 37.0)
+#     bepi_inf_inj_times_e1000, bepi_distances_e1000 = get_inf_inj_time('BepiColombo', df_bepi_onset_e1000, 'e', 1.4)
+#     bepi_inf_inj_times_e100, bepi_distances_e100 = get_inf_inj_time('BepiColombo', df_bepi_onset_e100, 'e', 0.106)
+#     #
+#     # e.g:
+#     # for i in range(len(df_bepi_onset_e100)):
+#     #     print(df_bepi_onset_e100[i], bepi_inf_inj_times_e100[i], bepi_distances_e100[i])
 """
 END CALC INF_INJ_TIMES
 """
