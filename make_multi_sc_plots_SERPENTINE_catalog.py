@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import sunpy
-from inf_inj_time import inf_inj_time
+from seppy.tools import inf_inj_time
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.transforms import blended_transform_factory
 from seppy.loader.psp import calc_av_en_flux_PSP_EPIHI, calc_av_en_flux_PSP_EPILO, psp_isois_load, resample_df
