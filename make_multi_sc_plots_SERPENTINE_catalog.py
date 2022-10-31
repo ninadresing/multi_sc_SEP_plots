@@ -417,27 +417,24 @@ calc_inf_inj_time = False
 if calc_inf_inj_time:
     df = pd.read_csv('WP2_multi_sc_catalog - WP2_multi_sc_event_list_draft.csv')
 
-    fixed_mean_energies_p = {
-                            'SOLO': np.sqrt(25.09*41.18),
-                            'PSP': np.sqrt(26.91*38.05),
-                            'STEREO-A': np.sqrt(26.3*40.5),
-                            'L1 (SOHO/Wind)': np.sqrt(25*40),
-                            'BepiColombo': 37.0
-                            }
-    fixed_mean_energies_e1000 = {
-                                'SOLO': np.sqrt(0.4533*2.4010),
-                                'PSP': np.sqrt(0.7071*2.8284),
-                                'STEREO-A': np.sqrt(0.7*2.8),
-                                'L1 (SOHO/Wind)': np.sqrt(0.67*10.4),
-                                'BepiColombo': 1.4
-                                }
-    fixed_mean_energies_e100 = {
-                                'SOLO': np.sqrt(85.6*130.5)/1000.,
+    fixed_mean_energies_p = {'SOLO': np.sqrt(25.09*41.18),
+                             'PSP': np.sqrt(26.91*38.05),
+                             'STEREO-A': np.sqrt(26.3*40.5),
+                             'L1 (SOHO/Wind)': np.sqrt(25*40),
+                             'BepiColombo': 37.0
+                             }
+    fixed_mean_energies_e1000 = {'SOLO': np.sqrt(0.4533*2.4010),
+                                 'PSP': np.sqrt(0.7071*2.8284),
+                                 'STEREO-A': np.sqrt(0.7*2.8),
+                                 'L1 (SOHO/Wind)': np.sqrt(0.67*10.4),
+                                 'BepiColombo': 1.4
+                                 }
+    fixed_mean_energies_e100 = {'SOLO': np.sqrt(85.6*130.5)/1000.,
                                 'PSP': np.sqrt(65.91*153.50)/1000.,
                                 'STEREO-A': np.sqrt(85.*125.)/1000.,
                                 'L1 (SOHO/Wind)': np.sqrt(75.63*140.46)/1000.,
                                 'BepiColombo': 0.106
-                            }
+                                }
     sw = 400
 
     # inj_times_p = []
@@ -662,8 +659,9 @@ if mode == 'events':
     dates = all_onset_dates_first
 # for startdate in tqdm(dates.to_pydatetime()):
 # for i in tqdm(range(len(dates))):
+for i in tqdm(range(27, len(dates))):
 # for i in tqdm(range(3, len(dates))):
-for i in tqdm([3, 27]):
+# for i in tqdm([30]):
     # i=24
     print(i, dates[i])
     if mode == 'regular':
@@ -859,23 +857,25 @@ for i in tqdm([3, 27]):
                                             path=sixs_path)
         if len(sixs_df) > 0:
             sixs_df_p = sixs_df[[f"P{i}" for i in range(1, 10)]]
-            sixs_df_e = sixs_df[[f"E{i}" for i in range(1, 8)]] 
+            sixs_df_e = sixs_df[[f"E{i}" for i in range(1, 8)]]
 
-########## AVERAGE ENERGY CHANNELS
-####################################################
+    """
+    ########## AVERAGE ENERGY CHANNELS ##########
+    #############################################
+    """
     if SOLO:
         if len(ept_e) > 0:
             if plot_e_100:
                 df_ept_e = ept_e['Electron_Flux']
                 ept_en_str_e = ept_energies['Electron_Bins_Text'][:]
 
-                if ept_use_corr_e:
-                    print('correcting e')
-                    ion_cont_corr_matrix = np.loadtxt('EPT_ion_contamination_flux_paco.dat')
-                    Electron_Flux_cont = np.zeros(np.shape(df_ept_e))
-                    for tt in range(len(df_ept_e)):
-                        Electron_Flux_cont[tt, :] = np.matmul(ion_cont_corr_matrix, df_ept_p.values[tt, :])
-                    df_ept_e = df_ept_e - Electron_Flux_cont
+                # if ept_use_corr_e:
+                #     print('correcting e')
+                #     ion_cont_corr_matrix = np.loadtxt('EPT_ion_contamination_flux_paco.dat')
+                #     Electron_Flux_cont = np.zeros(np.shape(df_ept_e))
+                #     for tt in range(len(df_ept_e)):
+                #         Electron_Flux_cont[tt, :] = np.matmul(ion_cont_corr_matrix, df_ept_p.values[tt, :])
+                #     df_ept_e = df_ept_e - Electron_Flux_cont
 
                 df_ept_e, ept_chstring_e = calc_av_en_flux_EPD(ept_e, ept_energies, ept_ch_e100, 'e', 'ept')
 
@@ -949,9 +949,9 @@ for i in tqdm([3, 27]):
             sixs_e100_en_channel_string = sixs_meta['Energy_Bin_str'][f'E{sixs_ch_e100}']
 
             if isinstance(sixs_resample, str):
-                    sixs_df_e100 = resample_df(sixs_df_e100, sixs_resample)
-                    sixs_df_e1 = resample_df(sixs_df_e1, sixs_resample)
-                    sixs_df_p25 = resample_df(sixs_df_p25, sixs_resample)
+                sixs_df_e100 = resample_df(sixs_df_e100, sixs_resample)
+                sixs_df_e1 = resample_df(sixs_df_e1, sixs_resample)
+                sixs_df_p25 = resample_df(sixs_df_p25, sixs_resample)
 
     if PSP:
         if len(psp_het) > 0:
@@ -976,11 +976,10 @@ for i in tqdm([3, 27]):
                                                                                  chan=psp_epilo_channel,
                                                                                  viewing=psp_epilo_viewing)
 
-
                 # select energy channel
                 # TODO: introduce calc_av_en_flux_PSP_EPILO(). ATM, if list of channels, only first one is selected
                 # if type(psp_epilo_ch_e100) is list:
-                    # psp_epilo_ch_e100 = psp_epilo_ch_e100[0]
+                #     psp_epilo_ch_e100 = psp_epilo_ch_e100[0]
                 # df_psp_epilo_e = df_psp_epilo_e.filter(like=f'_E{psp_epilo_ch_e100}_')
 
                 # energy = en_dict['Electron_ChanF_Energy'].filter(like=f'_E{en_channel}_P{viewing}').values[0]
@@ -992,7 +991,6 @@ for i in tqdm([3, 27]):
                     df_psp_epilo_e = resample_df(df_psp_epilo_e, psp_epilo_resample)
 
     ##########################################################################################
-
 
     panels = 0
     if plot_e_1:
@@ -1017,10 +1015,10 @@ for i in tqdm([3, 27]):
             species_string = 'Electrons (corrected)'
 
         # plot flare times with arrows on top
-        if mode == 'events':   
+        if mode == 'events':
             trans = blended_transform_factory(x_transform=ax.transData, y_transform=ax.transAxes)
             ind = np.where((np.array(df_flare_times) < enddate) & (np.array(df_flare_times) > startdate))
-            [ax.annotate('', 
+            [ax.annotate('',
                          xy=[mdates.date2num(i), 1.0], xycoords=trans,
                          xytext=[mdates.date2num(i), 1.07], textcoords=trans,
                          arrowprops=dict(arrowstyle="->", lw=2)) for i in np.array(df_flare_times)[ind]]
@@ -1032,7 +1030,7 @@ for i in tqdm([3, 27]):
                         drawstyle='steps-mid')
             if plot_times:
                 [ax.axvline(i, lw=2, color=psp_het_color) for i in df_psp_onset_e100]
-                [ax.axvline(i, lw=2, ls=':', color=psp_het_color) for i in df_psp_peak_e100]    
+                [ax.axvline(i, lw=2, ls=':', color=psp_het_color) for i in df_psp_peak_e100]
 
         if Bepi:
             # ax.plot(sixs_e.index, sixs_e[sixs_ch_e], color='orange', linewidth=linewidth, label='BepiColombo\nSIXS '+sixs_chstrings[sixs_ch_e]+f'\nside {sixs_side_e}', drawstyle='steps-mid')
@@ -1040,7 +1038,7 @@ for i in tqdm([3, 27]):
                 ax.plot(sixs_df_e100.index, sixs_df_e100, color=sixs_color, linewidth=linewidth, label='BepiColombo/SIXS '+sixs_e100_en_channel_string+f' side {sixs_side}', drawstyle='steps-mid')
             if plot_times:
                 [ax.axvline(i, lw=2, color=sixs_color) for i in df_bepi_onset_e100]
-                [ax.axvline(i, lw=2, ls=':', color=sixs_color) for i in df_bepi_peak_e100]   
+                [ax.axvline(i, lw=2, ls=':', color=sixs_color) for i in df_bepi_peak_e100]
         if SOLO:
             if ept and (len(ept_e) > 0):
                 flux_ept = df_ept_e.values
@@ -1104,8 +1102,8 @@ for i in tqdm([3, 27]):
                         label='PSP '+r"$\bf{(count\ rate\ *10)}$"+'\nISOIS-EPIHI-HET '+psp_het_chstring_e+'\nA (sun)',
                         drawstyle='steps-mid')
             if plot_times:
-                [ax.axvline(i, lw=2, color=psp_het_color) for i in df_psp_onset_e1000] 
-                [ax.axvline(i, lw=2, ls=':', color=psp_het_color) for i in df_psp_peak_e1000] 
+                [ax.axvline(i, lw=2, color=psp_het_color) for i in df_psp_onset_e1000]
+                [ax.axvline(i, lw=2, ls=':', color=psp_het_color) for i in df_psp_peak_e1000]
         if Bepi:
             # ax.plot(sixs_e.index, sixs_e[sixs_ch_e100], color='orange', linewidth=linewidth,
             #         label='Bepi/SIXS '+sixs_chstrings[sixs_ch_e100]+f' side {sixs_side_e}', drawstyle='steps-mid')
@@ -1113,14 +1111,14 @@ for i in tqdm([3, 27]):
                 ax.plot(sixs_df_e1.index, sixs_df_e1, color=sixs_color, linewidth=linewidth,
                         label='BepiColombo/SIXS '+sixs_e1_en_channel_string+f' side {sixs_side}', drawstyle='steps-mid')
             if plot_times:
-                [ax.axvline(i, lw=2, color=sixs_color) for i in df_bepi_onset_e1000] 
-                [ax.axvline(i, lw=2, ls=':', color=sixs_color) for i in df_bepi_peak_e1000] 
+                [ax.axvline(i, lw=2, color=sixs_color) for i in df_bepi_onset_e1000]
+                [ax.axvline(i, lw=2, ls=':', color=sixs_color) for i in df_bepi_peak_e1000]
         if SOLO:
             if het and (len(het_e) > 0):
                 ax.plot(df_het_e.index.values, df_het_e.flux, linewidth=linewidth, color=solo_het_color, label='SOLO/HET '+het_chstring_e+f' {sector}', drawstyle='steps-mid')
             if plot_times:
-                [ax.axvline(i, lw=2, color=solo_het_color) for i in df_solo_onset_e1000] 
-                [ax.axvline(i, lw=2, ls=':', color=solo_het_color) for i in df_solo_peak_e1000] 
+                [ax.axvline(i, lw=2, color=solo_het_color) for i in df_solo_onset_e1000]
+                [ax.axvline(i, lw=2, ls=':', color=solo_het_color) for i in df_solo_peak_e1000]
         if STEREO:
             if stereo_het:
                 if len(sta_het_avg_e) > 0:
@@ -1199,12 +1197,12 @@ for i in tqdm([3, 27]):
                 elif type(erne_p_ch) == int:
                     if len(soho_erne) > 0:
                         ax.plot(soho_erne.index, soho_erne[f'PH_{erne_p_ch}'], color=soho_erne_color, linewidth=linewidth, label='SOHO/ERNE/HED '+erne_chstring[erne_p_ch], drawstyle='steps-mid')
-            if ephin_p:
-                ax.plot(ephin['date'], ephin[ephin_ch_p][0], color=soho_ephin_color, linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_p][1], drawstyle='steps-mid')
+            # if ephin_p:
+            #     ax.plot(ephin['date'], ephin[ephin_ch_p][0], color=soho_ephin_color, linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_p][1], drawstyle='steps-mid')
             if plot_times:
                 [ax.axvline(i, lw=2, color=soho_erne_color) for i in df_soho_onset_p]
                 [ax.axvline(i, lw=2, ls=':', color=soho_erne_color) for i in df_soho_peak_p]
-        #if WIND:
+        # if WIND:
             # multiply by 1e6 to get per MeV
         #    ax.plot(wind3dp_p_df.index, wind3dp_p_df[f'FLUX_{wind3dp_ch_p}']*1e6, color=wind_color, linewidth=linewidth, label='Wind\n3DP '+str(round(wind3dp_p_df[f'ENERGY_{wind3dp_ch_p}'].mean()/1000., 2)) + ' keV', drawstyle='steps-mid')
         # ax.set_ylim(2.05e-5, 4.8e0)
