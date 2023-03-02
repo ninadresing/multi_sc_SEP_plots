@@ -663,9 +663,9 @@ if mode == 'regular':
 if mode == 'events':
     dates = all_onset_dates_first
 # for startdate in tqdm(dates.to_pydatetime()):  # not in use any more
-for i in tqdm(range(len(dates))):
+for i in tqdm(range(len(dates))):  # standard
 # for i in tqdm(range(7, len(dates))):
-# for i in tqdm([30]):
+# for i in tqdm([3, 25, 27, 30, 32, 34, 41, 43]):  # replot some events which automatically are replaced with day+1 plots
     # i=24
     print(i, dates[i])
     if mode == 'regular':
