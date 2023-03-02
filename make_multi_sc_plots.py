@@ -45,6 +45,8 @@ enddate = dt.datetime(2021, 4, 19, 23, 59)
 plot_period = '60h'
 averaging = '20min'  # '5min'  # None
 
+lower_proton = False  # True if 13 MeV protons should be used instead of 25+ MeV
+
 
 Bepi = True
 PSP = True
@@ -285,7 +287,7 @@ plot_e_100 = False
 plot_e_1 = True
 plot_p = True
 save_fig = True
-outpath = 'plots'  # '/Users/dresing/Documents/Proposals/SERPENTINE_H2020/Cycle25_Multi-SC_SEP_Event_List/Multi_sc_plots'
+outpath = 'plots/april_17'  # '/Users/dresing/Documents/Proposals/SERPENTINE_H2020/Cycle25_Multi-SC_SEP_Event_List/Multi_sc_plots'
 
 # dates = pd.date_range(start=first_date, end=last_date, freq=plot_period)
 # startdate = dates[i].to_pydatetime()
@@ -299,6 +301,8 @@ if Bepi:
     sixs_ch_e1 = 5  # [5, 6]  # => 5
     sixs_ch_e100 = 2
     sixs_ch_p = 8  # [8, 9]  # we want 'P8'-'P9' averaged
+    if lower_proton:
+        sixs_ch_p = [7]
     sixs_side = 2
     sixs_color = 'orange'  # seaborn_colorblind[4]  # orange?
     sixs_path = '/home/gieseler/uni/bepi/data/bc_mpo_sixs/data_csv/cruise/sixs-p/raw'
@@ -311,6 +315,8 @@ if SOHO:
     soho_path = '/home/gieseler/uni/soho/data/'
     if erne:
         erne_p_ch = 2  # [3, 4]  # [0]  # [4,5]  # 2
+        if lower_proton:
+            erne_p_ch = [0]
     if ephin_e:
         ephin_ch_e1 = 'E150'  # 'E1300'
         # ephin_e_intercal = 1/14.
@@ -324,6 +330,8 @@ if SOLO:
     het_ch_e1 = [0]  # [0, 1]  # cf. het_energies
     ept_ch_p = [50, 56]  # 50-56
     het_ch_p = [16, 18]  # [19, 24]  # [18, 19]  # cf. het_energies
+    if lower_proton:
+        het_ch_p = [11, 12]
     solo_ept_resample = averaging
     solo_het_resample = averaging
     solo_path = '/home/gieseler/uni/solo/data/'
@@ -336,6 +344,8 @@ if STEREO:
     sept_ch_p = [25, 30]
     st_het_ch_e = 0  # [0, 1]   cf. sta_het_meta['channels_dict_df_e']
     st_het_ch_p = 3  # [5, 8]  # 3  #7 #3   cf. sta_het_meta['channels_dict_df_p']
+    if lower_proton:
+        st_het_ch_p = [0]
     let_ch = 5  # 1
     sta_het_resample = averaging
     sta_sept_resample = averaging
@@ -352,7 +362,8 @@ if PSP:
     psp_epilo_ch_e100 = [4, 5]  # cf. psp_epilo_energies
     psp_het_ch_e = [4, 5]  # [3, 10]  # cf. psp_het_energies
     psp_het_ch_p = [7]  # [8, 9]  # cf. psp_het_energies
-
+    if lower_proton:
+        psp_het_ch_p = [4]
     psp_epilo_channel = 'F'
     psp_epilo_viewing = 3  # 3="sun", 7="antisun"
     psp_epilo_threshold = None  # 1e2  # None
@@ -720,8 +731,8 @@ if plot_e_1:
             # ax.plot(psp_het.index, psp_het[f'A_Electrons_Rate_{psp_het_ch_e}'], color=psp_het_color, linewidth=linewidth,
             #         label='PSP '+r"$\bf{(count\ rates)}$"+'\nISOIS-EPIHI-HET '+psp_het_energies['Electrons_ENERGY_LABL'][psp_het_ch_e][0].replace(' ', '').replace('-', ' - ').replace('MeV', ' MeV')+'\nA (sun)',
             #         drawstyle='steps-mid')
-            ax.plot(df_psp_het_e.index, df_psp_het_e*100, color=psp_het_color, linewidth=linewidth,
-                    label='PSP '+r"$\bf{(count\ rate\ *100)}$"+'\nISOIS-EPIHI '+psp_het_chstring_e+'\nA (sun)',
+            ax.plot(df_psp_het_e.index, df_psp_het_e*10, color=psp_het_color, linewidth=linewidth,
+                    label='PSP '+r"$\bf{(count\ rate\ *10)}$"+'\nISOIS-EPIHI '+psp_het_chstring_e+'\nA (sun)',
                     drawstyle='steps-mid')
     if Bepi:
         # ax.plot(sixs_e.index, sixs_e[sixs_ch_e100], color='orange', linewidth=linewidth,
@@ -741,7 +752,7 @@ if plot_e_1:
         if ephin_e:
             # ax.plot(ephin['date'], ephin[ephin_ch_e][0]*ephin_e_intercal, color=soho_ephin_color, linewidth=linewidth, label='SOHO/EPHIN '+ephin[ephin_ch_e][1]+f'/{ephin_e_intercal}', drawstyle='steps-mid')
             if len(soho_ephin) > 0:
-                ax.plot(soho_ephin.index, soho_ephin[ephin_ch_e1]/20, color=soho_ephin_color, linewidth=linewidth, label='SOHO '+r"$\bf{(flux\, /\, 20)}$"+'\nEPHIN '+ephin_energies[ephin_ch_e1], drawstyle='steps-mid', zorder=-99)
+                ax.plot(soho_ephin.index, soho_ephin[ephin_ch_e1]/14, color=soho_ephin_color, linewidth=linewidth, label='SOHO '+r"$\bf{(flux\, /\, 14)}$"+'\nEPHIN '+ephin_energies[ephin_ch_e1], drawstyle='steps-mid', zorder=-99)
 
     # ax.set_ylim(7.9e-3, 4.7e1)
     # ax.set_ylim(0.3842003987966555, 6333.090511873226)

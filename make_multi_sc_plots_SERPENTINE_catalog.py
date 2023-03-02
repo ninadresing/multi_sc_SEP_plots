@@ -38,11 +38,13 @@ moved this file to Deepnote June 15 2022
 #############################################################
 
 # processing mode: 'regular' (e.g. weekly) or 'events'
-mode = 'events'
+mode = 'regular'
+
+lower_proton = False  # True if 13 MeV protons should be used instead of 25+ MeV
 
 if mode == 'regular':
-    first_date = dt.datetime(2022, 1, 1)
-    last_date = dt.datetime(2022, 6, 1)
+    first_date = dt.datetime(2022, 11, 19)
+    last_date = dt.datetime(2022, 12, 31)
     plot_period = '7D'
     averaging = '1h'  # '5min'  # None
 
@@ -221,7 +223,7 @@ def bepi_sixs_load(startdate, enddate, side, path):
             df = pd.concat([df, t_df])
 
     channels_dict = {"Energy_Bin_str": {'E1': '71 keV', 'E2': '106 keV', 'E3': '169 keV', 'E4': '280 keV', 'E5': '960 keV', 'E6': '2240 keV', 'E7': '8170 keV',
-                                        'P1': '1.1 MeV', 'P2': '1.2 MeV', 'P3': '1.5 MeV', 'P4': '2.3 MeV', 'P5': '4.0 MeV', 'P6': '8.0 MeV', 'P7': '15.0 MeV', 'P8': '25.1 MeV', 'P9': '37.3 MeV'},
+                                        'P1': '1.1 MeV', 'P2': '1.2 MeV', 'P3': '1.5 MeV', 'P4': '2.3 MeV', 'P5': '4.0 MeV', 'P6': '8.0 MeV', 'P7': '14.5 MeV', 'P8': '25.1 MeV', 'P9': '37.3 MeV'},
                      "Electron_Bins_Low_Energy": np.array([55, 78, 134, 235, 1000, 1432, 4904]),
                      "Electron_Bins_High_Energy": np.array([92, 143, 214, 331, 1193, 3165, 10000]),
                      "Ion_Bins_Low_Energy": np.array([0.001, 1.088, 1.407, 2.139, 3.647, 7.533, 13.211, 22.606, 29.246]),
@@ -229,7 +231,7 @@ def bepi_sixs_load(startdate, enddate, side, path):
     return df, channels_dict
 
 
-def calc_av_en_flux_sixs(df, channel, species):
+def calc_av_en_flux_sixs(df, meta, channel, species):
     """
     This function averages the flux of two energy channels of BepiColombo/SIXS into a combined energy channel
     channel numbers counted from 1
@@ -259,15 +261,17 @@ def calc_av_en_flux_sixs(df, channel, species):
     GEOMFACTOR_PROT_COMB89 = 3.34
     GEOMFACTOR_ELEC_COMB56 = 0.0972
 
+    if type(channel) == list and len(channel) == 1:
+        channel = channel[0]
+
     if species in ['p', 'protons']:
         if channel == [8, 9]:
             countrate = df['P8'] * GEOMFACTOR_PROT8 + df['P9'] * GEOMFACTOR_PROT9
             flux = countrate / GEOMFACTOR_PROT_COMB89
             en_channel_string = '37 MeV'
         else:
-            print('No valid channel combination selected.')
-            flux = pd.Series()
-            en_channel_string = ''
+            flux = df[f'P{channel}']
+            en_channel_string = sixs_meta['Energy_Bin_str'][f'P{channel}']
 
     if species in ['e', 'electrons']:
         if channel == [5, 6]:
@@ -275,9 +279,8 @@ def calc_av_en_flux_sixs(df, channel, species):
             flux = countrate / GEOMFACTOR_ELEC_COMB56
             en_channel_string = '1.4 MeV'
         else:
-            print('No valid channel combination selected.')
-            flux = pd.Series()
-            en_channel_string = ''
+            flux = df[f'E{channel}']
+            en_channel_string = sixs_meta['Energy_Bin_str'][f'E{channel}']
 
     return flux, en_channel_string
 
@@ -644,6 +647,8 @@ if plot_peak_vs_time2:
         if len(fluxes) > 0:
             ax.bar(dates[np.argmax(fluxes)], fluxes[np.argmax(fluxes)], width=3, color='k', label=f'{event}')
     ax.set_title('>25 MeV protons')
+    if lower_proton:
+        ax.set_title('14 MeV protons')
     ax.set_xlim(dt.datetime(2020, 11, 1), dt.datetime(2022, 6, 1))
     ax.set_yscale('log')
     ax.set_ylabel('Peak Flux / (s cm² sr MeV)')
@@ -657,10 +662,9 @@ if mode == 'regular':
     dates = pd.date_range(start=first_date, end=last_date, freq=plot_period)
 if mode == 'events':
     dates = all_onset_dates_first
-# for startdate in tqdm(dates.to_pydatetime()):
-# for i in tqdm(range(len(dates))):
-for i in tqdm(range(27, len(dates))):
-# for i in tqdm(range(3, len(dates))):
+# for startdate in tqdm(dates.to_pydatetime()):  # not in use any more
+for i in tqdm(range(len(dates))):
+# for i in tqdm(range(7, len(dates))):
 # for i in tqdm([30]):
     # i=24
     print(i, dates[i])
@@ -670,7 +674,9 @@ for i in tqdm(range(27, len(dates))):
         startdate = dt.datetime.fromisoformat(dates[i].isoformat()) - pd.Timedelta('5h')
         plot_period = ('48h')
     enddate = startdate + pd.Timedelta(plot_period)
-    outfile = f'{outpath}{os.sep}Multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av.png'
+    outfile = f'{outpath}{os.sep}multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av.png'
+    if lower_proton:
+        outfile = f'{outpath}{os.sep}multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av_p-mod.png'
 
     if Bepi:
         # av_bepi = 10
@@ -678,6 +684,8 @@ for i in tqdm(range(27, len(dates))):
         sixs_ch_e1 = [5, 6]
         sixs_ch_e100 = 2
         sixs_ch_p = [8, 9]  # we want 'P8'-'P9' averaged
+        if lower_proton:
+            sixs_ch_p = [7]
         sixs_side = 2
         sixs_color = 'orange'  # seaborn_colorblind[4]  # orange?
         sixs_path = '/home/gieseler/uni/bepi/data/bc_mpo_sixs/data_csv/cruise/sixs-p/raw'
@@ -690,6 +698,8 @@ for i in tqdm(range(27, len(dates))):
         soho_path = '/home/gieseler/uni/soho/data/'
         if erne:
             erne_p_ch = [3, 4]  # [0]  # [4,5]  # 2
+            if lower_proton:
+                erne_p_ch = [0]
         if ephin_e:
             ephin_ch_e1 = 'E1300'
             # ephin_e_intercal = 1/14.
@@ -703,6 +713,8 @@ for i in tqdm(range(27, len(dates))):
         het_ch_e1 = [0, 1]
         ept_ch_p = [50, 56]  # 50-56
         het_ch_p = [19, 24]  # [18, 19]
+        if lower_proton:
+            het_ch_p = [11, 12]
         solo_ept_resample = averaging
         solo_het_resample = averaging
         solo_path = '/home/gieseler/uni/solo/data/'
@@ -715,6 +727,8 @@ for i in tqdm(range(27, len(dates))):
         sept_ch_p = [25, 30]
         st_het_ch_e = [0, 1]
         st_het_ch_p = [5, 8]  # 3  #7 #3
+        if lower_proton:
+            st_het_ch_p = [0]
         let_ch = 5  # 1
         sta_het_resample = averaging
         sta_sept_resample = averaging
@@ -731,7 +745,8 @@ for i in tqdm(range(27, len(dates))):
         psp_epilo_ch_e100 = [4, 5]  # cf. psp_epilo_energies
         psp_het_ch_e = [3, 10]  # cf. psp_het_energies
         psp_het_ch_p = [8, 9]  # cf. psp_het_energies
-
+        if lower_proton:
+            psp_het_ch_p = [4]
         psp_epilo_channel = 'F'
         psp_epilo_viewing = 3  # 3="sun", 7="antisun"
         psp_epilo_threshold = None  # 1e2  # None
@@ -941,9 +956,9 @@ for i in tqdm(range(27, len(dates))):
     if Bepi:
         if len(sixs_df) > 0:
             # 1 MeV electrons:
-            sixs_df_e1, sixs_e1_en_channel_string = calc_av_en_flux_sixs(sixs_df_e, sixs_ch_e1, 'e')
+            sixs_df_e1, sixs_e1_en_channel_string = calc_av_en_flux_sixs(sixs_df_e, sixs_meta, sixs_ch_e1, 'e')
             # >25 MeV protons:
-            sixs_df_p25, sixs_p25_en_channel_string = calc_av_en_flux_sixs(sixs_df_p, sixs_ch_p, 'p')
+            sixs_df_p25, sixs_p25_en_channel_string = calc_av_en_flux_sixs(sixs_df_p, sixs_meta, sixs_ch_p, 'p')
             # 100 keV electrons withouth averaging:
             sixs_df_e100 = sixs_df_e[f'E{sixs_ch_e100}']
             sixs_e100_en_channel_string = sixs_meta['Energy_Bin_str'][f'E{sixs_ch_e100}']
@@ -1210,6 +1225,8 @@ for i in tqdm(range(27, len(dates))):
         ax.set_yscale('log')
         ax.set_ylabel(intensity_label)
         ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), title='>25 MeV Protons/Ions')
+        if lower_proton:
+            ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), title='14 MeV Protons/Ions')
         axnum = axnum+1
     # pos = get_horizons_coord('Solar Orbiter', startdate, 'id')
     # dist = np.round(pos.radius.value, 2)

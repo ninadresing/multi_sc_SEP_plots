@@ -1,6 +1,7 @@
 # personal settings
 data/
 plots/
+threshold_cases/
 
 ### Python: https://raw.githubusercontent.com/github/gitignore/master/Python.gitignore
 
