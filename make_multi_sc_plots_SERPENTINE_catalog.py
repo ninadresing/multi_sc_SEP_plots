@@ -38,12 +38,12 @@ moved this file to Deepnote June 15 2022
 #############################################################
 
 # processing mode: 'regular' (e.g. weekly) or 'events'
-mode = 'regular'
+mode = 'events'
 
 lower_proton = False  # True if 13 MeV protons should be used instead of 25+ MeV
 
 if mode == 'regular':
-    first_date = dt.datetime(2022, 11, 19)
+    first_date = dt.datetime(2022, 9, 24)
     last_date = dt.datetime(2022, 12, 31)
     plot_period = '7D'
     averaging = '1h'  # '5min'  # None
@@ -676,6 +676,8 @@ for i in tqdm(range(len(dates))):  # standard
         plot_period = ('48h')
     enddate = startdate + pd.Timedelta(plot_period)
     outfile = f'{outpath}{os.sep}multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av.png'
+    if mode == 'events':
+        outfile = f'{outpath}{os.sep}multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av_{i}.png'
     if lower_proton:
         outfile = f'{outpath}{os.sep}multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av_p-mod.png'
 
