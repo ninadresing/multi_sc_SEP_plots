@@ -41,6 +41,7 @@ moved this file to Deepnote June 15 2022
 mode = 'events'
 
 lower_proton = False  # True if 13 MeV protons should be used instead of 25+ MeV
+add_sept_conta_ch = True  # True if contaminaiting SEPT ion channel (ch 15) should be added to the 100 keV electron panel
 
 if mode == 'regular':
     first_date = dt.datetime(2022, 9, 24)
@@ -664,9 +665,9 @@ if mode == 'events':
     dates = all_onset_dates_first
 # for startdate in tqdm(dates.to_pydatetime()):  # not in use any more
 for i in tqdm(range(len(dates))):  # standard
-# for i in tqdm(range(7, len(dates))):
-# for i in tqdm([3, 25, 27, 30, 32, 34, 41, 43, 48]):  # replot some events which automatically are replaced with day+1 plots
-# for i in tqdm([3, 25, 27, 30, 32, 34, 41, 43, 48]):  # replot some events which automatically are replaced with day+1 plots
+    # for i in tqdm(range(7, len(dates))):
+    # for i in tqdm([3, 25, 27, 30, 32, 34, 41, 43, 48]):  # replot some events which automatically are replaced with day+1 plots
+    # for i in tqdm([3, 25, 27, 30, 32, 34, 41, 43, 48]):  # replot some events which automatically are replaced with day+1 plots
     # i=24
     print(i, dates[i])
     if mode == 'regular':
@@ -798,7 +799,7 @@ for i in tqdm(range(len(dates))):  # standard
             sta_sept_df_e, sta_sept_dict_e = stereo_load(instrument='sept', startdate=startdate, enddate=enddate, spacecraft='sta', sept_species='e', sept_viewing=sector, resample=sta_sept_resample, path=stereo_path, max_conn=1)
             sept_ch_e = sept_ch_e100
 
-        if sept_p:
+        if sept_p or add_sept_conta_ch:
             print('loading stereo/sept p')
 
             sta_sept_df_p, sta_sept_dict_p = stereo_load(instrument='sept', startdate=startdate, enddate=enddate, spacecraft='sta', sept_species='p', sept_viewing=sector, resample=sta_sept_resample, path=stereo_path, max_conn=1)
@@ -1092,6 +1093,11 @@ for i in tqdm(range(len(dates))):  # standard
             if plot_times:
                 [ax.axvline(i, lw=2, color=wind_color) for i in df_wind_onset_e100]
                 [ax.axvline(i, lw=2, ls=':', color=wind_color) for i in df_wind_peak_e100]
+
+        if add_sept_conta_ch:
+            # ax.plot(sta_sept_df_p.index, sta_sept_avg_p, color=stereo_sept_color, linewidth=linewidth, label='STEREO/SEPT '+sept_chstring_p+f' {sector}', drawstyle='steps-mid')
+            ax.plot(sta_sept_df_p.index, sta_sept_df_p['ch_15'], color='limegreen', linewidth=linewidth,
+                    label='STEREO/SEPT '+sta_sept_dict_p.loc[15]['ch_strings']+f' {sector}\n'+r"$\bf{IONS}$", drawstyle='steps-mid')
 
         # ax.set_ylim(7.9e-3, 4.7e1)
         # ax.set_ylim(0.3842003987966555, 6333.090511873226)
