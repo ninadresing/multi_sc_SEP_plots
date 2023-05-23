@@ -1,3 +1,7 @@
+"""
+REQUIRES PANDAS 1.4.4 (resp. crashes with 1.5.x)
+"""
+
 import datetime as dt
 import os
 import warnings
@@ -38,14 +42,23 @@ moved this file to Deepnote June 15 2022
 #############################################################
 
 # processing mode: 'regular' (e.g. weekly) or 'events'
-mode = 'events'
+mode = 'regular'
 
 lower_proton = False  # True if 13 MeV protons should be used instead of 25+ MeV
-add_sept_conta_ch = True  # True if contaminaiting SEPT ion channel (ch 15) should be added to the 100 keV electron panel
+add_contaminating_channels = True
+
+if add_contaminating_channels:
+    add_sept_conta_ch = True  # True if contaminaiting STEREO-A/SEPT ion channel (ch 15) should be added to the 100 keV electron panel
+    add_ept_conta_ch = True  # True if contaminaiting SolO/EPT ion channel (XXX) should be added to the 100 keV electron panel
+    add_3dp_conta_ch = True  # True if contaminaiting Wind/3DP ion channel (XXX) should be added to the 100 keV electron panel
+else:
+    add_sept_conta_ch = False  # True if contaminaiting STEREO-A/SEPT ion channel (ch 15) should be added to the 100 keV electron panel
+    add_ept_conta_ch = False  # True if contaminaiting SolO/EPT ion channel (XXX) should be added to the 100 keV electron panel
+    add_3dp_conta_ch = False  # True if contaminaiting Wind/3DP ion channel (XXX) should be added to the 100 keV electron panel
 
 if mode == 'regular':
-    first_date = dt.datetime(2022, 9, 24)
-    last_date = dt.datetime(2022, 12, 31)
+    first_date = dt.datetime(2022, 5, 28)
+    last_date = dt.datetime(2023, 4, 30)
     plot_period = '7D'
     averaging = '1h'  # '5min'  # None
 
@@ -309,9 +322,9 @@ if plot_times:
     # df = pd.read_excel('WP2_multi-sc_SEP_event_list_D2.3.xlsx')
 
     # get list of flare times
-    df_flare_date_str = df['flare date\n(yyyy-mm-dd)'].values.astype(str)
+    df_flare_date_str = df['flare date (yyyy-mm-dd)'].values.astype(str)
     df_flare_date_str = np.delete(df_flare_date_str, np.where(df_flare_date_str == 'nan'))
-    df_flare_times_str = df['flare time\n(HH:MM:SS)'].values.astype(str)
+    df_flare_times_str = df['flare time (HH:MM:SS)'].values.astype(str)
     df_flare_times_str = np.delete(df_flare_times_str, np.where(df_flare_times_str == 'nan'))
     df_flare_times = []
     for i in range(len(df_flare_date_str)):
@@ -775,7 +788,7 @@ for i in tqdm(range(len(dates))):  # standard
                                                         max_conn=1)
             wind3dp_ch_e = wind3dp_ch_e100
 
-        if wind3dp_p:
+        if wind3dp_p or add_3dp_conta_ch:
             print('loading wind/3dp p')
             wind3dp_p_df, wind3dp_p_meta = wind3dp_load(dataset="WI_SOSP_3DP", startdate=startdate, enddate=enddate, resample=wind_3dp_resample, multi_index=False, path=wind_path, max_conn=1)
 
@@ -906,6 +919,13 @@ for i in tqdm(range(len(dates))):  # standard
                 df_ept_p, ept_chstring_p = calc_av_en_flux_EPD(ept_p, ept_energies, ept_ch_p, 'p', 'ept')
                 if isinstance(solo_ept_resample, str):
                     df_ept_p = resample_df(df_ept_p, solo_ept_resample)
+        if len(ept_p) > 0:
+            if add_ept_conta_ch:
+                ept_conta_ch = [30, 31]
+                df_ept_conta_p, ept_conta_chstring_p = calc_av_en_flux_EPD(ept_p, ept_energies, ept_conta_ch, 'p', 'ept')
+
+                if isinstance(solo_ept_resample, str):
+                    df_ept_conta_p = resample_df(df_ept_conta_p, solo_ept_resample)
 
         if len(het_e) > 0:
             if plot_e_1:
@@ -1018,7 +1038,11 @@ for i in tqdm(range(len(dates))):  # standard
         panels = panels + 1
     if plot_p:
         panels = panels + 1
-    fig, axes = plt.subplots(panels, figsize=(24, 15), dpi=200, sharex=True)
+
+    if add_ept_conta_ch or add_sept_conta_ch or add_3dp_conta_ch:
+        fig, axes = plt.subplots(panels, figsize=(24, 15), dpi=200, sharex=True, gridspec_kw={'height_ratios': [3, 1, 1]})
+    else:
+        fig, axes = plt.subplots(panels, figsize=(24, 15), dpi=200, sharex=True)
     axnum = 0
     # Intensities
     ####################################################################
@@ -1094,10 +1118,23 @@ for i in tqdm(range(len(dates))):  # standard
                 [ax.axvline(i, lw=2, color=wind_color) for i in df_wind_onset_e100]
                 [ax.axvline(i, lw=2, ls=':', color=wind_color) for i in df_wind_peak_e100]
 
-        if add_sept_conta_ch:
+        if add_ept_conta_ch:
+            ept_conta_color = solo_ept_color  # 'cyan'
+            if len(ept_p) > 0:
+                ax.plot(df_ept_conta_p.index.values, df_ept_conta_p.values, ls='--', linewidth=linewidth, color=ept_conta_color, label='SOLO\nEPT '+ept_conta_chstring_p+f'\n{sector}'+r" $\bf{IONS}$", drawstyle='steps-mid')
+
+        if add_sept_conta_ch and len(sta_sept_df_p) > 0:
             # ax.plot(sta_sept_df_p.index, sta_sept_avg_p, color=stereo_sept_color, linewidth=linewidth, label='STEREO/SEPT '+sept_chstring_p+f' {sector}', drawstyle='steps-mid')
-            ax.plot(sta_sept_df_p.index, sta_sept_df_p['ch_15'], color='limegreen', linewidth=linewidth,
+            sept_conta_color = stereo_sept_color  # 'brown'
+            ax.plot(sta_sept_df_p.index, sta_sept_df_p['ch_15'], color=sept_conta_color, ls='--', linewidth=linewidth,
                     label='STEREO/SEPT '+sta_sept_dict_p.loc[15]['ch_strings']+f' {sector}\n'+r"$\bf{IONS}$", drawstyle='steps-mid')
+
+        if add_3dp_conta_ch:
+            wind_3dp_conta_ch = 4
+            wind_3dp_conta_color = wind_color  # 'darkgreen'
+            if len(wind3dp_p_df) > 0:
+                # multiply by 1e6 to get per MeV
+                ax.plot(wind3dp_p_df.index, wind3dp_p_df[f'FLUX_{wind_3dp_conta_ch}']*1e6, color=wind_3dp_conta_color, ls='--' ,linewidth=linewidth, label='Wind/3DP '+wind3dp_p_meta['channels_dict_df']['Bins_Text'][wind_3dp_conta_ch]+r" $\bf{prot}$", drawstyle='steps-mid')
 
         # ax.set_ylim(7.9e-3, 4.7e1)
         # ax.set_ylim(0.3842003987966555, 6333.090511873226)
