@@ -42,7 +42,7 @@ moved this file to Deepnote June 15 2022
 #############################################################
 
 # processing mode: 'regular' (e.g. weekly) or 'events'
-mode = 'regular'
+mode = 'events'
 
 lower_proton = False  # True if 13 MeV protons should be used instead of 25+ MeV
 add_contaminating_channels = True
@@ -57,7 +57,7 @@ else:
     add_3dp_conta_ch = False  # True if contaminaiting Wind/3DP ion channel (XXX) should be added to the 100 keV electron panel
 
 if mode == 'regular':
-    first_date = dt.datetime(2022, 5, 28)
+    first_date = dt.datetime(2022, 12, 10)
     last_date = dt.datetime(2023, 4, 30)
     plot_period = '7D'
     averaging = '1h'  # '5min'  # None
@@ -430,6 +430,13 @@ END LOAD ONSET TIMES
 """
 START CALC INF_INJ_TIMES
 """
+"""
+import datetime as dt
+import numpy as np
+import pandas as pd
+from seppy.tools import inf_inj_time
+from tqdm import tqdm
+"""
 calc_inf_inj_time = False
 if calc_inf_inj_time:
     df = pd.read_csv('WP2_multi_sc_catalog - WP2_multi_sc_event_list_draft.csv')
@@ -677,7 +684,7 @@ if mode == 'regular':
 if mode == 'events':
     dates = all_onset_dates_first
 # for startdate in tqdm(dates.to_pydatetime()):  # not in use any more
-for i in tqdm(range(len(dates))):  # standard
+for i in tqdm(range(0, len(dates))):  # standard
     # for i in tqdm(range(7, len(dates))):
     # for i in tqdm([3, 25, 27, 30, 32, 34, 41, 43, 48]):  # replot some events which automatically are replaced with day+1 plots
     # for i in tqdm([3, 25, 27, 30, 32, 34, 41, 43, 48]):  # replot some events which automatically are replaced with day+1 plots
@@ -868,6 +875,7 @@ for i in tqdm(range(len(dates))):  # standard
                 except(Exception):
                     print(f'No SOLO/EPT data for {startdate.date()} - {enddate.date()}')
                     ept_e = []
+                    ept_p = []
         if het:
             if plot_e_1 or plot_p:
                 print('loading solo/het e & p')
@@ -1253,7 +1261,7 @@ for i in tqdm(range(len(dates))):  # standard
                 [ax.axvline(i, lw=2, ls=':', color=stereo_het_color) for i in df_sta_peak_p]
         if SOHO:
             if erne:
-                if type(erne_p_ch) == list and len(soho_erne_avg_p) > 0:
+                if type(erne_p_ch) == list and len(soho_erne) > 0:
                     ax.plot(soho_erne_avg_p.index, soho_erne_avg_p, color=soho_erne_color, linewidth=linewidth, label='SOHO/ERNE/HED '+soho_erne_chstring_p, drawstyle='steps-mid')
                 elif type(erne_p_ch) == int:
                     if len(soho_erne) > 0:
