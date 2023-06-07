@@ -20,6 +20,9 @@ from seppy.loader.soho import calc_av_en_flux_ERNE, soho_load
 from solo_epd_loader import epd_load
 from seppy.loader.stereo import calc_av_en_flux_HET as calc_av_en_flux_ST_HET
 from seppy.loader.stereo import calc_av_en_flux_SEPT, stereo_load
+from seppy.loader.wind import wind3dp_load
+from sunpy.coordinates import frames, get_horizons_coord
+from tqdm import tqdm
 # import astropy.units as u
 # from cdflib.epochs import CDFepoch
 # from sunpy import log
@@ -27,8 +30,7 @@ from seppy.loader.stereo import calc_av_en_flux_SEPT, stereo_load
 # from sunpy.net import attrs as a
 # from sunpy.timeseries import TimeSeries
 # from sunpy.util.exceptions import warn_user
-from tqdm import tqdm
-from seppy.loader.wind import wind3dp_load
+
 
 '''
 June 2022
@@ -42,10 +44,10 @@ moved this file to Deepnote June 15 2022
 #############################################################
 
 # processing mode: 'regular' (e.g. weekly) or 'events'
-mode = 'events'
+mode = 'regular'
 
 lower_proton = False  # True if 13 MeV protons should be used instead of 25+ MeV
-add_contaminating_channels = True
+add_contaminating_channels = False
 
 if add_contaminating_channels:
     add_sept_conta_ch = True  # True if contaminaiting STEREO-A/SEPT ion channel (ch 15) should be added to the 100 keV electron panel
@@ -57,8 +59,8 @@ else:
     add_3dp_conta_ch = False  # True if contaminaiting Wind/3DP ion channel (XXX) should be added to the 100 keV electron panel
 
 if mode == 'regular':
-    first_date = dt.datetime(2022, 12, 10)
-    last_date = dt.datetime(2023, 4, 30)
+    first_date = dt.datetime(2022, 8, 27)
+    last_date = dt.datetime(2022, 8, 30)
     plot_period = '7D'
     averaging = '1h'  # '5min'  # None
 
@@ -427,19 +429,29 @@ END LOAD ONSET TIMES
 """
 
 
-"""
-START CALC INF_INJ_TIMES
-"""
-"""
-import datetime as dt
-import numpy as np
-import pandas as pd
-from seppy.tools import inf_inj_time
-from tqdm import tqdm
-"""
-calc_inf_inj_time = False
-if calc_inf_inj_time:
-    df = pd.read_csv('WP2_multi_sc_catalog - WP2_multi_sc_event_list_draft.csv')
+def calc_inf_inj_time(input_csv='WP2_multi_sc_catalog - WP2_multi_sc_event_list_draft.csv', output_csv=False, sw=400):
+    """
+    Calculates inferred injection times from catalogue csv file.
+
+    Parameters
+    ----------
+    input_csv : string
+        File name of csv file to read in. If not a full path, file is expected in the working directory.
+    output_csv : boolean or string (optional)
+        File name of new csv file to save. If not a full path, file is saved in the working directory.
+    sw : integer
+        Solar wind speed in km/s used for the calculation.
+
+    Returns
+    -------
+    df: pd.DataFrame
+        Updated DataFrame with obtained spacecraft coordinates
+
+    Example
+    -------
+    df = calc_inf_inj_time(output_csv='new_inf_inj_times.csv')
+    """
+    df = pd.read_csv(input_csv)
 
     fixed_mean_energies_p = {'SOLO': np.sqrt(25.09*41.18),
                              'PSP': np.sqrt(26.91*38.05),
@@ -459,14 +471,6 @@ if calc_inf_inj_time:
                                 'L1 (SOHO/Wind)': np.sqrt(75.63*140.46)/1000.,
                                 'BepiColombo': 0.106
                                 }
-    sw = 400
-
-    # inj_times_p = []
-    # distances_p = []
-    # inj_times_e100 = []
-    # distances_e100 = []
-    # inj_times_e1000 = []
-    # distances_e1000 = []
 
     for i in tqdm(range(df.shape[0])):
         mission = df['Observer'].iloc[i]
@@ -532,58 +536,62 @@ if calc_inf_inj_time:
             df['e100keV inferred injection date (yyyy-mm-dd)'].iloc[i] = inj_time_e100.strftime('%Y-%m-%d')
             df['e100keV pathlength used for inferred injection time (au)'].iloc[i] = distance_e100.value
 
-        # inj_times_p.append(inj_time_p)
-        # distances_p.append(distance_p)
-        # inj_times_e100.append(inj_time_e100)
-        # distances_e100.append(distance_e100)
-        # inj_times_e1000.append(inj_time_e1000)
-        # distances_e1000.append(distance_e1000)
+        if output_csv:
+            df.to_csv(output_csv, index=False)
+            print('Note that the format of some columns might have changed in the new csv file! To avoid this copy only the new columns from it, and paste them into your original spreadsheet.')
+        return df
 
-        # print('p    :', onset_date_p_str, onset_time_p_str, onset_p, distance_p, inj_time_p)
-        # print('e1000:', onset_date_e1000_str, onset_time_e1000_str, onset_e1000, distance_e1000, inj_time_e1000)
-        # print('e100 :', onset_date_e100_str, onset_time_e100_str, onset_e100, distance_e100, inj_time_e100)
 
-        df.to_csv('new.csv', index=False)
+def get_sc_coords(input_csv='WP2_multi_sc_catalog - WP2_multi_sc_event_list_draft.csv', output_csv=False):
+    """
+    Obtains spacecraft coordinates for datetime defined in Solar-MACH link,
+    but only if all three spacecraft coordinate fields are empty.
 
-# calc_inf_inj_time = False
-# if calc_inf_inj_time:
-#     #
-#     def get_inf_inj_time(mission, onset_list, particle, energy, solarwind_speed=400):
-#         inf_inj_times = []
-#         distances = []
-#         for i in tqdm(onset_list):
-#             inj_time, distance = inf_inj_time(mission, i, particle, energy, solarwind_speed)
-#             inf_inj_times.append(inj_time)
-#             distances.append(distance)
-#             # print(i, inj_time, distance)
-#         return inf_inj_times, distances
-#     #
-#     sta_inf_inj_times_p, sta_distances_p = get_inf_inj_time('STEREO-A', df_sta_onset_p, 'p', np.sqrt(26.3*40.5))
-#     sta_inf_inj_times_e1000, sta_distances_e1000 = get_inf_inj_time('STEREO-A', df_sta_onset_e1000, 'e', np.sqrt(26.3*40.5))
-#     sta_inf_inj_times_e100, sta_distances_e100 = get_inf_inj_time('STEREO-A', df_sta_onset_e100, 'e', np.sqrt(85.*125.)/1000.)
-#     #
-#     soho_inf_inj_times_p, soho_distances_p = get_inf_inj_time('SOHO', df_soho_onset_p, 'p', np.sqrt(25*40))
-#     soho_inf_inj_times_e1000, soho_distances_e1000 = get_inf_inj_time('SOHO', df_soho_onset_e1000, 'e', np.sqrt(0.67*10.4))
-#     wind_inf_inj_times_e100, wind_distances_e100 = get_inf_inj_time('Wind', df_wind_onset_e100, 'e', np.sqrt(75.63*140.46)/1000.)
-#     #
-#     solo_inf_inj_times_p, solo_distances_p = get_inf_inj_time('Solar Orbiter', df_solo_onset_p, 'p', np.sqrt(25.09*41.18))
-#     solo_inf_inj_times_e1000, solo_distances_e1000 = get_inf_inj_time('Solar Orbiter', df_solo_onset_e1000, 'e', np.sqrt(0.4533*2.4010))
-#     solo_inf_inj_times_e100, solo_distances_e100 = get_inf_inj_time('Solar Orbiter', df_solo_onset_e100, 'e', np.sqrt(85.6*130.5)/1000.)
-#     #
-#     psp_inf_inj_times_p, psp_distances_p = get_inf_inj_time('Parker Solar Probe', df_psp_onset_p, 'p', np.sqrt(26.91*38.05))
-#     psp_inf_inj_times_e1000, psp_distances_e1000 = get_inf_inj_time('Parker Solar Probe', df_psp_onset_e1000, 'e', np.sqrt(0.7071*2.8284))
-#     psp_inf_inj_times_e100, psp_distances_e100 = get_inf_inj_time('Parker Solar Probe', df_psp_onset_e100, 'e', np.sqrt(65.91*153.50)/1000.)
-#     #
-#     bepi_inf_inj_times_p, bepi_distances_p = get_inf_inj_time('BepiColombo', df_bepi_onset_p, 'p', 37.0)
-#     bepi_inf_inj_times_e1000, bepi_distances_e1000 = get_inf_inj_time('BepiColombo', df_bepi_onset_e1000, 'e', 1.4)
-#     bepi_inf_inj_times_e100, bepi_distances_e100 = get_inf_inj_time('BepiColombo', df_bepi_onset_e100, 'e', 0.106)
-#     #
-#     # e.g:
-#     # for i in range(len(df_bepi_onset_e100)):
-#     #     print(df_bepi_onset_e100[i], bepi_inf_inj_times_e100[i], bepi_distances_e100[i])
-"""
-END CALC INF_INJ_TIMES
-"""
+    Parameters
+    ----------
+    input_csv : string
+        File name of csv file to read in. If not a full path, file is expected in the working directory.
+    output_csv : boolean or string (optional)
+        File name of new csv file to save. If not a full path, file is saved in the working directory.
+
+    Returns
+    -------
+    df: pd.DataFrame
+        Updated DataFrame with obtained spacecraft coordinates
+
+    Example
+    -------
+    df = get_sc_coords(output_csv='new_sc_coords.csv')
+    """
+    df = pd.read_csv(input_csv)
+    # loop over all rows:
+    for row in range(len(df)):
+        ds = df.loc[row]  # get pd.Series of single row
+        # only execute if ALL S/C coords are nan (i.e., empty):
+        if np.all([np.isnan(ds['S/C distance (au)']), np.isnan(ds['S/C Carrington longitude (deg)']), np.isnan(ds['S/C Carrington latitude (deg)'])]):
+            print(row)
+            if type(ds['Solar-MACH link']) == str:
+                for n in ds['Solar-MACH link'].split('&'):
+                    if n.startswith('date='):
+                        date = n.split('=')[-1]  # %Y%m%d
+                    if n.startswith('time='):
+                        time = n.split('=')[-1]  # %H%M
+                datetime = dt.datetime.strptime(date + time, '%Y%m%d%H%M')
+                # use L1 coords for SOHO/Wind:
+                if ds['Observer'] == 'L1 (SOHO/Wind)':
+                    sc_coords = get_horizons_coord('SEMB-L1', datetime, None)
+                else:
+                    sc_coords = get_horizons_coord(ds['Observer'], datetime, None)
+
+                # convert from Stonyhurst to Carrington and obtain individual coords:
+                sc_coords = sc_coords.transform_to(frames.HeliographicCarrington(observer='Sun'))
+                df['S/C distance (au)'].loc[row] = sc_coords.radius.value
+                df['S/C Carrington longitude (deg)'].loc[row] = sc_coords.lon.value
+                df['S/C Carrington latitude (deg)'].loc[row] = sc_coords.lat.value
+    if output_csv:
+        df.to_csv(output_csv, index=False)
+        print('Note that the format of some columns might have changed in the new csv file! To avoid this copy only the new columns from it, and paste them into your original spreadsheet.')
+    return df
 
 
 """
@@ -872,7 +880,7 @@ for i in tqdm(range(0, len(dates))):  # standard
                 print('loading solo/ept e & p')
                 try:
                     ept_p, ept_e, ept_energies = epd_load(sensor='EPT', viewing=sector, level=data_product, startdate=sdate, enddate=edate, path=solo_path, autodownload=True)
-                except(Exception):
+                except (Exception):
                     print(f'No SOLO/EPT data for {startdate.date()} - {enddate.date()}')
                     ept_e = []
                     ept_p = []
@@ -881,7 +889,7 @@ for i in tqdm(range(0, len(dates))):  # standard
                 print('loading solo/het e & p')
                 try:
                     het_p, het_e, het_energies = epd_load(sensor='HET', viewing=sector, level=data_product, startdate=sdate, enddate=edate, path=solo_path, autodownload=True)
-                except(Exception):
+                except (Exception):
                     print(f'No SOLO/HET data for {startdate.date()} - {enddate.date()}')
                     het_e = []
                     het_p = []
@@ -1142,7 +1150,7 @@ for i in tqdm(range(0, len(dates))):  # standard
             wind_3dp_conta_color = wind_color  # 'darkgreen'
             if len(wind3dp_p_df) > 0:
                 # multiply by 1e6 to get per MeV
-                ax.plot(wind3dp_p_df.index, wind3dp_p_df[f'FLUX_{wind_3dp_conta_ch}']*1e6, color=wind_3dp_conta_color, ls='--' ,linewidth=linewidth, label='Wind/3DP '+wind3dp_p_meta['channels_dict_df']['Bins_Text'][wind_3dp_conta_ch]+r" $\bf{prot}$", drawstyle='steps-mid')
+                ax.plot(wind3dp_p_df.index, wind3dp_p_df[f'FLUX_{wind_3dp_conta_ch}']*1e6, color=wind_3dp_conta_color, ls='--', linewidth=linewidth, label='Wind/3DP '+wind3dp_p_meta['channels_dict_df']['Bins_Text'][wind_3dp_conta_ch]+r" $\bf{prot}$", drawstyle='steps-mid')
 
         # ax.set_ylim(7.9e-3, 4.7e1)
         # ax.set_ylim(0.3842003987966555, 6333.090511873226)
