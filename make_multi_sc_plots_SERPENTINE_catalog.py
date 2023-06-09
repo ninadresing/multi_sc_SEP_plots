@@ -504,6 +504,8 @@ def calc_inf_inj_time(input_csv='WP2_multi_sc_catalog - WP2_multi_sc_event_list_
         else:
             onset_e100 = dt.datetime.strptime(f'{onset_date_e100_str} {onset_time_e100_str}', '%Y-%m-%d %H:%M:%S')
 
+        print(i, mission, onset_p, onset_e1000, onset_e100)
+
         if not type(onset_p) == pd._libs.tslibs.nattype.NaTType:
             inj_time_p, distance_p = inf_inj_time(mission_p, onset_p, 'p', fixed_mean_energies_p[mission], sw)
         else:
@@ -526,26 +528,25 @@ def calc_inf_inj_time(input_csv='WP2_multi_sc_catalog - WP2_multi_sc_event_list_
         if not type(inj_time_p) == pd._libs.tslibs.nattype.NaTType:
             df['p25MeV inferred injection time (HH:MM:SS)'].iloc[i] = inj_time_p.strftime('%H:%M:%S')
             df['p25MeV inferred injection date (yyyy-mm-dd)'].iloc[i] = inj_time_p.strftime('%Y-%m-%d')
-            df['p25MeV pathlength used for inferred injection time (au)'].iloc[i] = distance_p.value
+            df['p25MeV pathlength used for inferred injection time (au)'].iloc[i] = np.round(distance_p.value, 2)
         if not type(inj_time_e1000) == pd._libs.tslibs.nattype.NaTType:
             df['e1MeV inferred injection time (HH:MM:SS)'].iloc[i] = inj_time_e1000.strftime('%H:%M:%S')
             df['e1MeV inferred injection date (yyyy-mm-dd)'].iloc[i] = inj_time_e1000.strftime('%Y-%m-%d')
-            df['e1MeV pathlength used for inferred injection time (au)'].iloc[i] = distance_e1000.value
+            df['e1MeV pathlength used for inferred injection time (au)'].iloc[i] = np.round(distance_e1000.value, 2)
         if not type(inj_time_e100) == pd._libs.tslibs.nattype.NaTType:
             df['e100keV inferred injection time (HH:MM:SS)'].iloc[i] = inj_time_e100.strftime('%H:%M:%S')
             df['e100keV inferred injection date (yyyy-mm-dd)'].iloc[i] = inj_time_e100.strftime('%Y-%m-%d')
-            df['e100keV pathlength used for inferred injection time (au)'].iloc[i] = distance_e100.value
+            df['e100keV pathlength used for inferred injection time (au)'].iloc[i] = np.round(distance_e100.value, 2)
 
-        if output_csv:
-            df.to_csv(output_csv, index=False)
-            print('Note that the format of some columns might have changed in the new csv file! To avoid this copy only the new columns from it, and paste them into your original spreadsheet.')
-        return df
+    if output_csv:
+        df.to_csv(output_csv, index=False)
+        print('Note that the format of some columns might have changed in the new csv file! To avoid this copy only the new columns from it, and paste them into your original spreadsheet.')
+    return df
 
 
 def get_sc_coords(input_csv='WP2_multi_sc_catalog - WP2_multi_sc_event_list_draft.csv', output_csv=False):
     """
-    Obtains spacecraft coordinates for datetime defined in Solar-MACH link,
-    but only if all three spacecraft coordinate fields are empty.
+    Obtains spacecraft coordinates for datetime defined in Solar-MACH link.
 
     Parameters
     ----------
@@ -568,26 +569,28 @@ def get_sc_coords(input_csv='WP2_multi_sc_catalog - WP2_multi_sc_event_list_draf
     for row in range(len(df)):
         ds = df.loc[row]  # get pd.Series of single row
         # only execute if ALL S/C coords are nan (i.e., empty):
-        if np.all([np.isnan(ds['S/C distance (au)']), np.isnan(ds['S/C Carrington longitude (deg)']), np.isnan(ds['S/C Carrington latitude (deg)'])]):
-            print(row)
-            if type(ds['Solar-MACH link']) == str:
-                for n in ds['Solar-MACH link'].split('&'):
-                    if n.startswith('date='):
-                        date = n.split('=')[-1]  # %Y%m%d
-                    if n.startswith('time='):
-                        time = n.split('=')[-1]  # %H%M
-                datetime = dt.datetime.strptime(date + time, '%Y%m%d%H%M')
-                # use L1 coords for SOHO/Wind:
-                if ds['Observer'] == 'L1 (SOHO/Wind)':
-                    sc_coords = get_horizons_coord('SEMB-L1', datetime, None)
-                else:
-                    sc_coords = get_horizons_coord(ds['Observer'], datetime, None)
+        # if np.all([np.isnan(ds['S/C distance (au)']), np.isnan(ds['S/C Carrington longitude (deg)']), np.isnan(ds['S/C Carrington latitude (deg)'])]):
+        print(row)
+        if type(ds['Solar-MACH link']) == str:
+            for n in ds['Solar-MACH link'].split('&'):
+                if n.startswith('date='):
+                    date = n.split('=')[-1]  # %Y%m%d
+                if n.startswith('time='):
+                    time = n.split('=')[-1]  # %H%M
+            datetime = dt.datetime.strptime(date + time, '%Y%m%d%H%M')
+            # use L1 coords for SOHO/Wind:
+            if ds['Observer'] == 'L1 (SOHO/Wind)':
+                sc_coords = get_horizons_coord('SEMB-L1', datetime, None)
+            else:
+                sc_coords = get_horizons_coord(ds['Observer'], datetime, None)
 
-                # convert from Stonyhurst to Carrington and obtain individual coords:
-                sc_coords = sc_coords.transform_to(frames.HeliographicCarrington(observer='Sun'))
-                df['S/C distance (au)'].loc[row] = sc_coords.radius.value
-                df['S/C Carrington longitude (deg)'].loc[row] = sc_coords.lon.value
-                df['S/C Carrington latitude (deg)'].loc[row] = sc_coords.lat.value
+            # convert from Stonyhurst to Carrington and obtain individual coords:
+            sc_coords = sc_coords.transform_to(frames.HeliographicCarrington(observer='Sun'))
+            df['S/C distance (au)'].loc[row] = np.round(sc_coords.radius.value, 2)
+            df['S/C Carrington longitude (deg)'].loc[row] = np.round(sc_coords.lon.value, 0).astype(int)
+            df['S/C Carrington latitude (deg)'].loc[row] = np.round(sc_coords.lat.value, 0).astype(int)
+    df['S/C Carrington longitude (deg)'] = df['S/C Carrington longitude (deg)'].astype(pd.Int64Dtype())
+    df['S/C Carrington latitude (deg)'] = df['S/C Carrington latitude (deg)'].astype(pd.Int64Dtype())
     if output_csv:
         df.to_csv(output_csv, index=False)
         print('Note that the format of some columns might have changed in the new csv file! To avoid this copy only the new columns from it, and paste them into your original spreadsheet.')
