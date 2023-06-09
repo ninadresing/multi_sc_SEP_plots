@@ -1,3 +1,7 @@
+"""
+REQUIRES PANDAS 1.4.4 (resp. crashes with 1.5.x)
+"""
+
 import datetime as dt
 import os
 import warnings
@@ -16,6 +20,9 @@ from seppy.loader.soho import calc_av_en_flux_ERNE, soho_load
 from solo_epd_loader import epd_load
 from seppy.loader.stereo import calc_av_en_flux_HET as calc_av_en_flux_ST_HET
 from seppy.loader.stereo import calc_av_en_flux_SEPT, stereo_load
+from seppy.loader.wind import wind3dp_load
+from sunpy.coordinates import frames, get_horizons_coord
+from tqdm import tqdm
 # import astropy.units as u
 # from cdflib.epochs import CDFepoch
 # from sunpy import log
@@ -23,8 +30,7 @@ from seppy.loader.stereo import calc_av_en_flux_SEPT, stereo_load
 # from sunpy.net import attrs as a
 # from sunpy.timeseries import TimeSeries
 # from sunpy.util.exceptions import warn_user
-from tqdm import tqdm
-from seppy.loader.wind import wind3dp_load
+
 
 '''
 June 2022
@@ -38,11 +44,23 @@ moved this file to Deepnote June 15 2022
 #############################################################
 
 # processing mode: 'regular' (e.g. weekly) or 'events'
-mode = 'events'
+mode = 'regular'
+
+lower_proton = False  # True if 13 MeV protons should be used instead of 25+ MeV
+add_contaminating_channels = False
+
+if add_contaminating_channels:
+    add_sept_conta_ch = True  # True if contaminaiting STEREO-A/SEPT ion channel (ch 15) should be added to the 100 keV electron panel
+    add_ept_conta_ch = True  # True if contaminaiting SolO/EPT ion channel (XXX) should be added to the 100 keV electron panel
+    add_3dp_conta_ch = True  # True if contaminaiting Wind/3DP ion channel (XXX) should be added to the 100 keV electron panel
+else:
+    add_sept_conta_ch = False  # True if contaminaiting STEREO-A/SEPT ion channel (ch 15) should be added to the 100 keV electron panel
+    add_ept_conta_ch = False  # True if contaminaiting SolO/EPT ion channel (XXX) should be added to the 100 keV electron panel
+    add_3dp_conta_ch = False  # True if contaminaiting Wind/3DP ion channel (XXX) should be added to the 100 keV electron panel
 
 if mode == 'regular':
-    first_date = dt.datetime(2022, 1, 1)
-    last_date = dt.datetime(2022, 6, 1)
+    first_date = dt.datetime(2022, 8, 27)
+    last_date = dt.datetime(2022, 8, 30)
     plot_period = '7D'
     averaging = '1h'  # '5min'  # None
 
@@ -221,7 +239,7 @@ def bepi_sixs_load(startdate, enddate, side, path):
             df = pd.concat([df, t_df])
 
     channels_dict = {"Energy_Bin_str": {'E1': '71 keV', 'E2': '106 keV', 'E3': '169 keV', 'E4': '280 keV', 'E5': '960 keV', 'E6': '2240 keV', 'E7': '8170 keV',
-                                        'P1': '1.1 MeV', 'P2': '1.2 MeV', 'P3': '1.5 MeV', 'P4': '2.3 MeV', 'P5': '4.0 MeV', 'P6': '8.0 MeV', 'P7': '15.0 MeV', 'P8': '25.1 MeV', 'P9': '37.3 MeV'},
+                                        'P1': '1.1 MeV', 'P2': '1.2 MeV', 'P3': '1.5 MeV', 'P4': '2.3 MeV', 'P5': '4.0 MeV', 'P6': '8.0 MeV', 'P7': '14.5 MeV', 'P8': '25.1 MeV', 'P9': '37.3 MeV'},
                      "Electron_Bins_Low_Energy": np.array([55, 78, 134, 235, 1000, 1432, 4904]),
                      "Electron_Bins_High_Energy": np.array([92, 143, 214, 331, 1193, 3165, 10000]),
                      "Ion_Bins_Low_Energy": np.array([0.001, 1.088, 1.407, 2.139, 3.647, 7.533, 13.211, 22.606, 29.246]),
@@ -229,7 +247,7 @@ def bepi_sixs_load(startdate, enddate, side, path):
     return df, channels_dict
 
 
-def calc_av_en_flux_sixs(df, channel, species):
+def calc_av_en_flux_sixs(df, meta, channel, species):
     """
     This function averages the flux of two energy channels of BepiColombo/SIXS into a combined energy channel
     channel numbers counted from 1
@@ -259,15 +277,17 @@ def calc_av_en_flux_sixs(df, channel, species):
     GEOMFACTOR_PROT_COMB89 = 3.34
     GEOMFACTOR_ELEC_COMB56 = 0.0972
 
+    if type(channel) == list and len(channel) == 1:
+        channel = channel[0]
+
     if species in ['p', 'protons']:
         if channel == [8, 9]:
             countrate = df['P8'] * GEOMFACTOR_PROT8 + df['P9'] * GEOMFACTOR_PROT9
             flux = countrate / GEOMFACTOR_PROT_COMB89
             en_channel_string = '37 MeV'
         else:
-            print('No valid channel combination selected.')
-            flux = pd.Series()
-            en_channel_string = ''
+            flux = df[f'P{channel}']
+            en_channel_string = sixs_meta['Energy_Bin_str'][f'P{channel}']
 
     if species in ['e', 'electrons']:
         if channel == [5, 6]:
@@ -275,9 +295,8 @@ def calc_av_en_flux_sixs(df, channel, species):
             flux = countrate / GEOMFACTOR_ELEC_COMB56
             en_channel_string = '1.4 MeV'
         else:
-            print('No valid channel combination selected.')
-            flux = pd.Series()
-            en_channel_string = ''
+            flux = df[f'E{channel}']
+            en_channel_string = sixs_meta['Energy_Bin_str'][f'E{channel}']
 
     return flux, en_channel_string
 
@@ -305,9 +324,9 @@ if plot_times:
     # df = pd.read_excel('WP2_multi-sc_SEP_event_list_D2.3.xlsx')
 
     # get list of flare times
-    df_flare_date_str = df['flare date\n(yyyy-mm-dd)'].values.astype(str)
+    df_flare_date_str = df['flare date (yyyy-mm-dd)'].values.astype(str)
     df_flare_date_str = np.delete(df_flare_date_str, np.where(df_flare_date_str == 'nan'))
-    df_flare_times_str = df['flare time\n(HH:MM:SS)'].values.astype(str)
+    df_flare_times_str = df['flare time (HH:MM:SS)'].values.astype(str)
     df_flare_times_str = np.delete(df_flare_times_str, np.where(df_flare_times_str == 'nan'))
     df_flare_times = []
     for i in range(len(df_flare_date_str)):
@@ -410,12 +429,29 @@ END LOAD ONSET TIMES
 """
 
 
-"""
-START CALC INF_INJ_TIMES
-"""
-calc_inf_inj_time = False
-if calc_inf_inj_time:
-    df = pd.read_csv('WP2_multi_sc_catalog - WP2_multi_sc_event_list_draft.csv')
+def calc_inf_inj_time(input_csv='WP2_multi_sc_catalog - WP2_multi_sc_event_list_draft.csv', output_csv=False, sw=400):
+    """
+    Calculates inferred injection times from catalogue csv file.
+
+    Parameters
+    ----------
+    input_csv : string
+        File name of csv file to read in. If not a full path, file is expected in the working directory.
+    output_csv : boolean or string (optional)
+        File name of new csv file to save. If not a full path, file is saved in the working directory.
+    sw : integer
+        Solar wind speed in km/s used for the calculation.
+
+    Returns
+    -------
+    df: pd.DataFrame
+        Updated DataFrame with obtained spacecraft coordinates
+
+    Example
+    -------
+    df = calc_inf_inj_time(output_csv='new_inf_inj_times.csv')
+    """
+    df = pd.read_csv(input_csv)
 
     fixed_mean_energies_p = {'SOLO': np.sqrt(25.09*41.18),
                              'PSP': np.sqrt(26.91*38.05),
@@ -435,14 +471,6 @@ if calc_inf_inj_time:
                                 'L1 (SOHO/Wind)': np.sqrt(75.63*140.46)/1000.,
                                 'BepiColombo': 0.106
                                 }
-    sw = 400
-
-    # inj_times_p = []
-    # distances_p = []
-    # inj_times_e100 = []
-    # distances_e100 = []
-    # inj_times_e1000 = []
-    # distances_e1000 = []
 
     for i in tqdm(range(df.shape[0])):
         mission = df['Observer'].iloc[i]
@@ -476,6 +504,8 @@ if calc_inf_inj_time:
         else:
             onset_e100 = dt.datetime.strptime(f'{onset_date_e100_str} {onset_time_e100_str}', '%Y-%m-%d %H:%M:%S')
 
+        print(i, mission, onset_p, onset_e1000, onset_e100)
+
         if not type(onset_p) == pd._libs.tslibs.nattype.NaTType:
             inj_time_p, distance_p = inf_inj_time(mission_p, onset_p, 'p', fixed_mean_energies_p[mission], sw)
         else:
@@ -498,68 +528,73 @@ if calc_inf_inj_time:
         if not type(inj_time_p) == pd._libs.tslibs.nattype.NaTType:
             df['p25MeV inferred injection time (HH:MM:SS)'].iloc[i] = inj_time_p.strftime('%H:%M:%S')
             df['p25MeV inferred injection date (yyyy-mm-dd)'].iloc[i] = inj_time_p.strftime('%Y-%m-%d')
-            df['p25MeV pathlength used for inferred injection time (au)'].iloc[i] = distance_p.value
+            df['p25MeV pathlength used for inferred injection time (au)'].iloc[i] = np.round(distance_p.value, 2)
         if not type(inj_time_e1000) == pd._libs.tslibs.nattype.NaTType:
             df['e1MeV inferred injection time (HH:MM:SS)'].iloc[i] = inj_time_e1000.strftime('%H:%M:%S')
             df['e1MeV inferred injection date (yyyy-mm-dd)'].iloc[i] = inj_time_e1000.strftime('%Y-%m-%d')
-            df['e1MeV pathlength used for inferred injection time (au)'].iloc[i] = distance_e1000.value
+            df['e1MeV pathlength used for inferred injection time (au)'].iloc[i] = np.round(distance_e1000.value, 2)
         if not type(inj_time_e100) == pd._libs.tslibs.nattype.NaTType:
             df['e100keV inferred injection time (HH:MM:SS)'].iloc[i] = inj_time_e100.strftime('%H:%M:%S')
             df['e100keV inferred injection date (yyyy-mm-dd)'].iloc[i] = inj_time_e100.strftime('%Y-%m-%d')
-            df['e100keV pathlength used for inferred injection time (au)'].iloc[i] = distance_e100.value
+            df['e100keV pathlength used for inferred injection time (au)'].iloc[i] = np.round(distance_e100.value, 2)
 
-        # inj_times_p.append(inj_time_p)
-        # distances_p.append(distance_p)
-        # inj_times_e100.append(inj_time_e100)
-        # distances_e100.append(distance_e100)
-        # inj_times_e1000.append(inj_time_e1000)
-        # distances_e1000.append(distance_e1000)
+    if output_csv:
+        df.to_csv(output_csv, index=False)
+        print('Note that the format of some columns might have changed in the new csv file! To avoid this copy only the new columns from it, and paste them into your original spreadsheet.')
+    return df
 
-        # print('p    :', onset_date_p_str, onset_time_p_str, onset_p, distance_p, inj_time_p)
-        # print('e1000:', onset_date_e1000_str, onset_time_e1000_str, onset_e1000, distance_e1000, inj_time_e1000)
-        # print('e100 :', onset_date_e100_str, onset_time_e100_str, onset_e100, distance_e100, inj_time_e100)
 
-        df.to_csv('new.csv', index=False)
+def get_sc_coords(input_csv='WP2_multi_sc_catalog - WP2_multi_sc_event_list_draft.csv', output_csv=False):
+    """
+    Obtains spacecraft coordinates for datetime defined in Solar-MACH link.
 
-# calc_inf_inj_time = False
-# if calc_inf_inj_time:
-#     #
-#     def get_inf_inj_time(mission, onset_list, particle, energy, solarwind_speed=400):
-#         inf_inj_times = []
-#         distances = []
-#         for i in tqdm(onset_list):
-#             inj_time, distance = inf_inj_time(mission, i, particle, energy, solarwind_speed)
-#             inf_inj_times.append(inj_time)
-#             distances.append(distance)
-#             # print(i, inj_time, distance)
-#         return inf_inj_times, distances
-#     #
-#     sta_inf_inj_times_p, sta_distances_p = get_inf_inj_time('STEREO-A', df_sta_onset_p, 'p', np.sqrt(26.3*40.5))
-#     sta_inf_inj_times_e1000, sta_distances_e1000 = get_inf_inj_time('STEREO-A', df_sta_onset_e1000, 'e', np.sqrt(26.3*40.5))
-#     sta_inf_inj_times_e100, sta_distances_e100 = get_inf_inj_time('STEREO-A', df_sta_onset_e100, 'e', np.sqrt(85.*125.)/1000.)
-#     #
-#     soho_inf_inj_times_p, soho_distances_p = get_inf_inj_time('SOHO', df_soho_onset_p, 'p', np.sqrt(25*40))
-#     soho_inf_inj_times_e1000, soho_distances_e1000 = get_inf_inj_time('SOHO', df_soho_onset_e1000, 'e', np.sqrt(0.67*10.4))
-#     wind_inf_inj_times_e100, wind_distances_e100 = get_inf_inj_time('Wind', df_wind_onset_e100, 'e', np.sqrt(75.63*140.46)/1000.)
-#     #
-#     solo_inf_inj_times_p, solo_distances_p = get_inf_inj_time('Solar Orbiter', df_solo_onset_p, 'p', np.sqrt(25.09*41.18))
-#     solo_inf_inj_times_e1000, solo_distances_e1000 = get_inf_inj_time('Solar Orbiter', df_solo_onset_e1000, 'e', np.sqrt(0.4533*2.4010))
-#     solo_inf_inj_times_e100, solo_distances_e100 = get_inf_inj_time('Solar Orbiter', df_solo_onset_e100, 'e', np.sqrt(85.6*130.5)/1000.)
-#     #
-#     psp_inf_inj_times_p, psp_distances_p = get_inf_inj_time('Parker Solar Probe', df_psp_onset_p, 'p', np.sqrt(26.91*38.05))
-#     psp_inf_inj_times_e1000, psp_distances_e1000 = get_inf_inj_time('Parker Solar Probe', df_psp_onset_e1000, 'e', np.sqrt(0.7071*2.8284))
-#     psp_inf_inj_times_e100, psp_distances_e100 = get_inf_inj_time('Parker Solar Probe', df_psp_onset_e100, 'e', np.sqrt(65.91*153.50)/1000.)
-#     #
-#     bepi_inf_inj_times_p, bepi_distances_p = get_inf_inj_time('BepiColombo', df_bepi_onset_p, 'p', 37.0)
-#     bepi_inf_inj_times_e1000, bepi_distances_e1000 = get_inf_inj_time('BepiColombo', df_bepi_onset_e1000, 'e', 1.4)
-#     bepi_inf_inj_times_e100, bepi_distances_e100 = get_inf_inj_time('BepiColombo', df_bepi_onset_e100, 'e', 0.106)
-#     #
-#     # e.g:
-#     # for i in range(len(df_bepi_onset_e100)):
-#     #     print(df_bepi_onset_e100[i], bepi_inf_inj_times_e100[i], bepi_distances_e100[i])
-"""
-END CALC INF_INJ_TIMES
-"""
+    Parameters
+    ----------
+    input_csv : string
+        File name of csv file to read in. If not a full path, file is expected in the working directory.
+    output_csv : boolean or string (optional)
+        File name of new csv file to save. If not a full path, file is saved in the working directory.
+
+    Returns
+    -------
+    df: pd.DataFrame
+        Updated DataFrame with obtained spacecraft coordinates
+
+    Example
+    -------
+    df = get_sc_coords(output_csv='new_sc_coords.csv')
+    """
+    df = pd.read_csv(input_csv)
+    # loop over all rows:
+    for row in range(len(df)):
+        ds = df.loc[row]  # get pd.Series of single row
+        # only execute if ALL S/C coords are nan (i.e., empty):
+        # if np.all([np.isnan(ds['S/C distance (au)']), np.isnan(ds['S/C Carrington longitude (deg)']), np.isnan(ds['S/C Carrington latitude (deg)'])]):
+        print(row)
+        if type(ds['Solar-MACH link']) == str:
+            for n in ds['Solar-MACH link'].split('&'):
+                if n.startswith('date='):
+                    date = n.split('=')[-1]  # %Y%m%d
+                if n.startswith('time='):
+                    time = n.split('=')[-1]  # %H%M
+            datetime = dt.datetime.strptime(date + time, '%Y%m%d%H%M')
+            # use L1 coords for SOHO/Wind:
+            if ds['Observer'] == 'L1 (SOHO/Wind)':
+                sc_coords = get_horizons_coord('SEMB-L1', datetime, None)
+            else:
+                sc_coords = get_horizons_coord(ds['Observer'], datetime, None)
+
+            # convert from Stonyhurst to Carrington and obtain individual coords:
+            sc_coords = sc_coords.transform_to(frames.HeliographicCarrington(observer='Sun'))
+            df['S/C distance (au)'].loc[row] = np.round(sc_coords.radius.value, 2)
+            df['S/C Carrington longitude (deg)'].loc[row] = np.round(sc_coords.lon.value, 0).astype(int)
+            df['S/C Carrington latitude (deg)'].loc[row] = np.round(sc_coords.lat.value, 0).astype(int)
+    df['S/C Carrington longitude (deg)'] = df['S/C Carrington longitude (deg)'].astype(pd.Int64Dtype())
+    df['S/C Carrington latitude (deg)'] = df['S/C Carrington latitude (deg)'].astype(pd.Int64Dtype())
+    if output_csv:
+        df.to_csv(output_csv, index=False)
+        print('Note that the format of some columns might have changed in the new csv file! To avoid this copy only the new columns from it, and paste them into your original spreadsheet.')
+    return df
 
 
 """
@@ -644,6 +679,8 @@ if plot_peak_vs_time2:
         if len(fluxes) > 0:
             ax.bar(dates[np.argmax(fluxes)], fluxes[np.argmax(fluxes)], width=3, color='k', label=f'{event}')
     ax.set_title('>25 MeV protons')
+    if lower_proton:
+        ax.set_title('14 MeV protons')
     ax.set_xlim(dt.datetime(2020, 11, 1), dt.datetime(2022, 6, 1))
     ax.set_yscale('log')
     ax.set_ylabel('Peak Flux / (s cm² sr MeV)')
@@ -657,11 +694,11 @@ if mode == 'regular':
     dates = pd.date_range(start=first_date, end=last_date, freq=plot_period)
 if mode == 'events':
     dates = all_onset_dates_first
-# for startdate in tqdm(dates.to_pydatetime()):
-# for i in tqdm(range(len(dates))):
-for i in tqdm(range(27, len(dates))):
-# for i in tqdm(range(3, len(dates))):
-# for i in tqdm([30]):
+# for startdate in tqdm(dates.to_pydatetime()):  # not in use any more
+for i in tqdm(range(0, len(dates))):  # standard
+    # for i in tqdm(range(7, len(dates))):
+    # for i in tqdm([3, 25, 27, 30, 32, 34, 41, 43, 48]):  # replot some events which automatically are replaced with day+1 plots
+    # for i in tqdm([3, 25, 27, 30, 32, 34, 41, 43, 48]):  # replot some events which automatically are replaced with day+1 plots
     # i=24
     print(i, dates[i])
     if mode == 'regular':
@@ -670,7 +707,11 @@ for i in tqdm(range(27, len(dates))):
         startdate = dt.datetime.fromisoformat(dates[i].isoformat()) - pd.Timedelta('5h')
         plot_period = ('48h')
     enddate = startdate + pd.Timedelta(plot_period)
-    outfile = f'{outpath}{os.sep}Multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av.png'
+    outfile = f'{outpath}{os.sep}multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av.png'
+    if mode == 'events':
+        outfile = f'{outpath}{os.sep}multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av_{i}.png'
+    if lower_proton:
+        outfile = f'{outpath}{os.sep}multi_sc_plot_{startdate.date()}_{plot_period}_{averaging}-av_p-mod.png'
 
     if Bepi:
         # av_bepi = 10
@@ -678,6 +719,8 @@ for i in tqdm(range(27, len(dates))):
         sixs_ch_e1 = [5, 6]
         sixs_ch_e100 = 2
         sixs_ch_p = [8, 9]  # we want 'P8'-'P9' averaged
+        if lower_proton:
+            sixs_ch_p = [7]
         sixs_side = 2
         sixs_color = 'orange'  # seaborn_colorblind[4]  # orange?
         sixs_path = '/home/gieseler/uni/bepi/data/bc_mpo_sixs/data_csv/cruise/sixs-p/raw'
@@ -690,6 +733,8 @@ for i in tqdm(range(27, len(dates))):
         soho_path = '/home/gieseler/uni/soho/data/'
         if erne:
             erne_p_ch = [3, 4]  # [0]  # [4,5]  # 2
+            if lower_proton:
+                erne_p_ch = [0]
         if ephin_e:
             ephin_ch_e1 = 'E1300'
             # ephin_e_intercal = 1/14.
@@ -703,6 +748,8 @@ for i in tqdm(range(27, len(dates))):
         het_ch_e1 = [0, 1]
         ept_ch_p = [50, 56]  # 50-56
         het_ch_p = [19, 24]  # [18, 19]
+        if lower_proton:
+            het_ch_p = [11, 12]
         solo_ept_resample = averaging
         solo_het_resample = averaging
         solo_path = '/home/gieseler/uni/solo/data/'
@@ -715,6 +762,8 @@ for i in tqdm(range(27, len(dates))):
         sept_ch_p = [25, 30]
         st_het_ch_e = [0, 1]
         st_het_ch_p = [5, 8]  # 3  #7 #3
+        if lower_proton:
+            st_het_ch_p = [0]
         let_ch = 5  # 1
         sta_het_resample = averaging
         sta_sept_resample = averaging
@@ -731,7 +780,8 @@ for i in tqdm(range(27, len(dates))):
         psp_epilo_ch_e100 = [4, 5]  # cf. psp_epilo_energies
         psp_het_ch_e = [3, 10]  # cf. psp_het_energies
         psp_het_ch_p = [8, 9]  # cf. psp_het_energies
-
+        if lower_proton:
+            psp_het_ch_p = [4]
         psp_epilo_channel = 'F'
         psp_epilo_viewing = 3  # 3="sun", 7="antisun"
         psp_epilo_threshold = None  # 1e2  # None
@@ -756,7 +806,7 @@ for i in tqdm(range(27, len(dates))):
                                                         max_conn=1)
             wind3dp_ch_e = wind3dp_ch_e100
 
-        if wind3dp_p:
+        if wind3dp_p or add_3dp_conta_ch:
             print('loading wind/3dp p')
             wind3dp_p_df, wind3dp_p_meta = wind3dp_load(dataset="WI_SOSP_3DP", startdate=startdate, enddate=enddate, resample=wind_3dp_resample, multi_index=False, path=wind_path, max_conn=1)
 
@@ -780,7 +830,7 @@ for i in tqdm(range(27, len(dates))):
             sta_sept_df_e, sta_sept_dict_e = stereo_load(instrument='sept', startdate=startdate, enddate=enddate, spacecraft='sta', sept_species='e', sept_viewing=sector, resample=sta_sept_resample, path=stereo_path, max_conn=1)
             sept_ch_e = sept_ch_e100
 
-        if sept_p:
+        if sept_p or add_sept_conta_ch:
             print('loading stereo/sept p')
 
             sta_sept_df_p, sta_sept_dict_p = stereo_load(instrument='sept', startdate=startdate, enddate=enddate, spacecraft='sta', sept_species='p', sept_viewing=sector, resample=sta_sept_resample, path=stereo_path, max_conn=1)
@@ -833,15 +883,16 @@ for i in tqdm(range(27, len(dates))):
                 print('loading solo/ept e & p')
                 try:
                     ept_p, ept_e, ept_energies = epd_load(sensor='EPT', viewing=sector, level=data_product, startdate=sdate, enddate=edate, path=solo_path, autodownload=True)
-                except(Exception):
+                except (Exception):
                     print(f'No SOLO/EPT data for {startdate.date()} - {enddate.date()}')
                     ept_e = []
+                    ept_p = []
         if het:
             if plot_e_1 or plot_p:
                 print('loading solo/het e & p')
                 try:
                     het_p, het_e, het_energies = epd_load(sensor='HET', viewing=sector, level=data_product, startdate=sdate, enddate=edate, path=solo_path, autodownload=True)
-                except(Exception):
+                except (Exception):
                     print(f'No SOLO/HET data for {startdate.date()} - {enddate.date()}')
                     het_e = []
                     het_p = []
@@ -887,6 +938,13 @@ for i in tqdm(range(27, len(dates))):
                 df_ept_p, ept_chstring_p = calc_av_en_flux_EPD(ept_p, ept_energies, ept_ch_p, 'p', 'ept')
                 if isinstance(solo_ept_resample, str):
                     df_ept_p = resample_df(df_ept_p, solo_ept_resample)
+        if len(ept_p) > 0:
+            if add_ept_conta_ch:
+                ept_conta_ch = [30, 31]
+                df_ept_conta_p, ept_conta_chstring_p = calc_av_en_flux_EPD(ept_p, ept_energies, ept_conta_ch, 'p', 'ept')
+
+                if isinstance(solo_ept_resample, str):
+                    df_ept_conta_p = resample_df(df_ept_conta_p, solo_ept_resample)
 
         if len(het_e) > 0:
             if plot_e_1:
@@ -941,9 +999,9 @@ for i in tqdm(range(27, len(dates))):
     if Bepi:
         if len(sixs_df) > 0:
             # 1 MeV electrons:
-            sixs_df_e1, sixs_e1_en_channel_string = calc_av_en_flux_sixs(sixs_df_e, sixs_ch_e1, 'e')
+            sixs_df_e1, sixs_e1_en_channel_string = calc_av_en_flux_sixs(sixs_df_e, sixs_meta, sixs_ch_e1, 'e')
             # >25 MeV protons:
-            sixs_df_p25, sixs_p25_en_channel_string = calc_av_en_flux_sixs(sixs_df_p, sixs_ch_p, 'p')
+            sixs_df_p25, sixs_p25_en_channel_string = calc_av_en_flux_sixs(sixs_df_p, sixs_meta, sixs_ch_p, 'p')
             # 100 keV electrons withouth averaging:
             sixs_df_e100 = sixs_df_e[f'E{sixs_ch_e100}']
             sixs_e100_en_channel_string = sixs_meta['Energy_Bin_str'][f'E{sixs_ch_e100}']
@@ -999,7 +1057,11 @@ for i in tqdm(range(27, len(dates))):
         panels = panels + 1
     if plot_p:
         panels = panels + 1
-    fig, axes = plt.subplots(panels, figsize=(24, 15), dpi=200, sharex=True)
+
+    if add_ept_conta_ch or add_sept_conta_ch or add_3dp_conta_ch:
+        fig, axes = plt.subplots(panels, figsize=(24, 15), dpi=200, sharex=True, gridspec_kw={'height_ratios': [3, 1, 1]})
+    else:
+        fig, axes = plt.subplots(panels, figsize=(24, 15), dpi=200, sharex=True)
     axnum = 0
     # Intensities
     ####################################################################
@@ -1074,6 +1136,24 @@ for i in tqdm(range(27, len(dates))):
             if plot_times:
                 [ax.axvline(i, lw=2, color=wind_color) for i in df_wind_onset_e100]
                 [ax.axvline(i, lw=2, ls=':', color=wind_color) for i in df_wind_peak_e100]
+
+        if add_ept_conta_ch:
+            ept_conta_color = solo_ept_color  # 'cyan'
+            if len(ept_p) > 0:
+                ax.plot(df_ept_conta_p.index.values, df_ept_conta_p.values, ls='--', linewidth=linewidth, color=ept_conta_color, label='SOLO\nEPT '+ept_conta_chstring_p+f'\n{sector}'+r" $\bf{IONS}$", drawstyle='steps-mid')
+
+        if add_sept_conta_ch and len(sta_sept_df_p) > 0:
+            # ax.plot(sta_sept_df_p.index, sta_sept_avg_p, color=stereo_sept_color, linewidth=linewidth, label='STEREO/SEPT '+sept_chstring_p+f' {sector}', drawstyle='steps-mid')
+            sept_conta_color = stereo_sept_color  # 'brown'
+            ax.plot(sta_sept_df_p.index, sta_sept_df_p['ch_15'], color=sept_conta_color, ls='--', linewidth=linewidth,
+                    label='STEREO/SEPT '+sta_sept_dict_p.loc[15]['ch_strings']+f' {sector}\n'+r"$\bf{IONS}$", drawstyle='steps-mid')
+
+        if add_3dp_conta_ch:
+            wind_3dp_conta_ch = 4
+            wind_3dp_conta_color = wind_color  # 'darkgreen'
+            if len(wind3dp_p_df) > 0:
+                # multiply by 1e6 to get per MeV
+                ax.plot(wind3dp_p_df.index, wind3dp_p_df[f'FLUX_{wind_3dp_conta_ch}']*1e6, color=wind_3dp_conta_color, ls='--', linewidth=linewidth, label='Wind/3DP '+wind3dp_p_meta['channels_dict_df']['Bins_Text'][wind_3dp_conta_ch]+r" $\bf{prot}$", drawstyle='steps-mid')
 
         # ax.set_ylim(7.9e-3, 4.7e1)
         # ax.set_ylim(0.3842003987966555, 6333.090511873226)
@@ -1192,7 +1272,7 @@ for i in tqdm(range(27, len(dates))):
                 [ax.axvline(i, lw=2, ls=':', color=stereo_het_color) for i in df_sta_peak_p]
         if SOHO:
             if erne:
-                if type(erne_p_ch) == list and len(soho_erne_avg_p) > 0:
+                if type(erne_p_ch) == list and len(soho_erne) > 0:
                     ax.plot(soho_erne_avg_p.index, soho_erne_avg_p, color=soho_erne_color, linewidth=linewidth, label='SOHO/ERNE/HED '+soho_erne_chstring_p, drawstyle='steps-mid')
                 elif type(erne_p_ch) == int:
                     if len(soho_erne) > 0:
@@ -1210,6 +1290,8 @@ for i in tqdm(range(27, len(dates))):
         ax.set_yscale('log')
         ax.set_ylabel(intensity_label)
         ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), title='>25 MeV Protons/Ions')
+        if lower_proton:
+            ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), title='14 MeV Protons/Ions')
         axnum = axnum+1
     # pos = get_horizons_coord('Solar Orbiter', startdate, 'id')
     # dist = np.round(pos.radius.value, 2)
